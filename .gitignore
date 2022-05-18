@@ -70,3 +70,6 @@ lib/
 
 # package-lock.json
 package-lock.json
+
+# IDEs and editors
+.vscode/
