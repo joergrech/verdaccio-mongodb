@@ -8,12 +8,13 @@ import {
   RemoteUser,
   Logger,
 } from '@verdaccio/types';
-import { getUnauthorized } from '@verdaccio/commons-api';
+import { getUnauthorized, getInternalError, getForbidden, getBadData } from '@verdaccio/commons-api';
 
 import { CustomConfig } from '../types/index';
 import mongoConnector from '../util/mongoConnector.js';
 
-import { intersection } from './helpers';
+import { intersect } from './helpers';
+import { bcryptPassword, verifyPassword } from './passwords';
 
 /**
  * Custom Verdaccio Authenticate Plugin.
@@ -56,6 +57,10 @@ export default class MongoDBPluginAuth implements IPluginAuth<CustomConfig> {
       );
       this.config.fields.usergroups = 'usergroups';
     }
+    if (config.userIsUnique === undefined || (config.userIsUnique !== true && config.userIsUnique !== false)) {
+      this.logger.warn('MongoDB config for userIsUnique was not specified in the config file! Using default "true"');
+      this.config.fields.userIsUnique = true;
+    }
 
     return this;
   }
@@ -69,20 +74,27 @@ export default class MongoDBPluginAuth implements IPluginAuth<CustomConfig> {
   public async authenticate(username: string, password: string, cb: AuthCallback): Promise<void> {
     this.logger.debug("authenticate user '" + username + "' with password '" + password + "'");
 
+    // this.logger.info(`MongoDB: password '${password}' in bcrypt: '${bcryptPassword(password)}'`);
+
+    // Add cache for passwords with ttl (timeout)
+
     const client = await mongoConnector.connectToDatabase(this.config.uri);
     const db = await mongoConnector.getDb(this.config.db);
 
     try {
       await client.connect();
       const users = (await db).collection(this.config.collection);
-      const authQuery = `{ "${this.config.fields.username}": "${username}", "${this.config.fields.password}": "${password}" }`;
-      const authOptions = `{ "projection": { "_id": 0, "${this.config.fields.username}": 1, "${this.config.fields.usergroups}": 1 } }`;
+      const authQuery = `{ "${this.config.fields.username}": "${username}" }`;
+      const authOptions = `{ "projection": { "_id": 0, "${this.config.fields.username}": 1, "${this.config.fields.password}": 1, "${this.config.fields.usergroups}": 1 } }`;
 
       const foundUsers = await users.find(JSON.parse(authQuery), JSON.parse(authOptions));
       const firstUser = await foundUsers.next();
 
-      if (!firstUser || Object.keys(firstUser).length === 0) {
-        this.logger.error(`bad username/password, access denied for username '${username}'!`);
+      if (
+        !firstUser ||
+        Object.keys(firstUser).length === 0 ||
+        !verifyPassword(password, firstUser[this.config.fields.password])
+      ) {
         cb(getUnauthorized(`bad username/password, access denied for username '${username}'!`), false);
       } else {
         let groups: string[] = ['user'];
@@ -91,33 +103,32 @@ export default class MongoDBPluginAuth implements IPluginAuth<CustomConfig> {
         }
 
         // TODO:
-        // cb(getUnauthorized('the user does not have enough privileges'), false);
-        // const err: any = createError(403, `user ${userName} is not allowed to ${action} package ${pkg.name}`);
-        // err.code = 403;
-        // callback(err, false);
-        //
-        // bcrypt passwort
-        //
         // Add test cases (add user, auth, publish, unpublish, remove user?, ...): https://jestjs.io/
-        //
-        // changePassword()
 
         this.logger.info(`MongoDB: Auth succeded for '${username}' with groups: '${JSON.stringify(groups)}'`);
         return cb(null, groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
       }
     } catch (e) {
       this.logger.error(e);
-      cb(getUnauthorized('error, try again: ' + e), false);
+      cb(getInternalError('error, try again: ' + e), false);
     } finally {
       await client.close();
     }
   }
 
   /**
-   * NOTE: Not implemented but available functions (see https://verdaccio.org/docs/plugin-auth)
-   *
-   * changePassword?(user: string, password: string, newPassword: string, cb: AuthCallback): void;
+   * Change a user password
+   * @param username username to create
+   * @param password current/old password
+   * @param newPassword new password
+   * @param cb callback function
    */
+  public changePassword(username: string, password: string, newPassword: string, cb: Callback) {
+    this.logger.warn(`changePassword called for user: ${username}`);
+    return cb(
+      getInternalError('You are not allowed to change the password here! Please change your password via the webapp!')
+    );
+  }
 
   /**
    * Add a user to the database
@@ -127,13 +138,11 @@ export default class MongoDBPluginAuth implements IPluginAuth<CustomConfig> {
    */
   public async adduser(username: string, password: string, cb: Callback): Promise<void> {
     if (!username || username.length < 3) {
-      this.logger.error(`bad username, username is too short (min 3 characters)!`);
-      return cb(getUnauthorized(`bad username, username is too short (min 3 characters)!`), false);
+      return cb(getBadData(`Bad username, username is too short (min 3 characters)!`), false);
     }
 
     if (!password || password.length < 8) {
-      this.logger.error(`bad password, password is too short (min 8 characters)!`);
-      return cb(getUnauthorized(`bad password, password is too short (min 8 characters)!`), false);
+      return cb(getBadData(`Bad password, password is too short (min 8 characters)!`), false);
     }
 
     const client = await mongoConnector.connectToDatabase(this.config.uri);
@@ -145,75 +154,83 @@ export default class MongoDBPluginAuth implements IPluginAuth<CustomConfig> {
       const lookupQuery = `{ "${this.config.fields.username}": "${username}" }`;
       const lookupOptions = `{ "projection": { "_id": 0, "${this.config.fields.username}": 1, "${this.config.fields.usergroups}": 1 } }`;
 
-      const foundUsers = await users.find(JSON.parse(lookupQuery), JSON.parse(lookupOptions));
-      const firstUser = await foundUsers.next();
-
-      if (firstUser) {
-        this.logger.error(`bad username, user '${username}' already exists!`);
-        return cb(getUnauthorized(`bad username, user '${username}' already exists!`), false);
+      if (!this.config.userIsUnique || this.config.userIsUnique == undefined) {
+        // Check if user already exist - not necessary with uniqueIndex
+        const foundUsers = await users.find(JSON.parse(lookupQuery), JSON.parse(lookupOptions));
+        const firstUser = await foundUsers.next();
+        if (firstUser) {
+          return cb(getForbidden(`Bad username, user '${username}' already exists!`), false);
+        }
       }
 
+      // Trying to insert user - will throw exception if duplicate username already exists
       const insertQuery = `{ "${this.config.fields.username}": "${username}", "${this.config.fields.password}": "${password}", "usergroups": ["user"] }`;
-      const newUser = await users.insert(JSON.parse(insertQuery));
-      this.logger.debug(`added new user: ${JSON.stringify(newUser)}`);
-
+      const newUser = await users.insertOne(JSON.parse(insertQuery));
+      this.logger.info(`Added new user: ${JSON.stringify(newUser)}`);
       cb(null, true);
     } catch (e) {
-      this.logger.error(e);
-      cb(getUnauthorized('error, try again: ' + e), false);
+      const error = e.toString();
+      if (error.includes('duplicate key error')) {
+        cb(getForbidden(`Bad username, user '${username}' already exists!`), false);
+      } else {
+        cb(getInternalError('Error with adding user to MongoDB: ' + typeof e), false);
+      }
     } finally {
       await client.close();
     }
   }
 
   /**
+   * Check if user is allowed to access a package
    * Triggered on each access request
    * @param user
    * @param pkg
    * @param cb
    */
   public allow_access(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
-    const groupsIntersection = intersection(user.groups, pkg?.access || []);
+    const groupsIntersection = intersect(user.groups, pkg?.access || []);
     if (pkg?.access?.includes[user.name || ''] || groupsIntersection.length > 0) {
       this.logger.info(`${user.name} has been granted access to package '${(pkg as any).name}'`);
       cb(null, true);
     } else {
       this.logger.error(`${user.name} is not allowed to access the package '${(pkg as any).name}'`);
-      cb(getUnauthorized('error, try again'), false);
+      cb(getForbidden('error, try again'), false);
     }
   }
 
   /**
+   * Check if user is allowed to publish a package
    * Triggered on each publish request
    * @param user
    * @param pkg
    * @param cb
    */
   public allow_publish(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
-    const groupsIntersection = intersection(user.groups, pkg?.publish || []);
+    const groupsIntersection = intersect(user.groups, pkg?.publish || []);
     if (pkg?.publish?.includes[user.name || ''] || groupsIntersection.length > 0) {
       this.logger.info(`${user.name} has been granted the right to publish the package '${(pkg as any).name}'`);
       cb(null, true);
     } else {
       this.logger.error(`${user.name} is not allowed to publish the package '${(pkg as any).name}'`);
-      cb(getUnauthorized('error, try again'), false);
+      cb(getForbidden('error, try again'), false);
     }
   }
 
   /**
+   * Check if user is allowed to remove a package
    * Triggered on each unpublish request
    * @param user
    * @param pkg
    * @param cb
    */
   public allow_unpublish(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
-    const groupsIntersection = intersection(user.groups, pkg?.publish || []);
+    const groupsIntersection = intersect(user.groups, pkg?.publish || []);
     if (pkg?.publish?.includes[user.name || ''] || groupsIntersection.length > 0) {
       this.logger.info(`${user.name} has been granted the right to unpublish the package '${(pkg as any).name}'`);
       cb(null, true);
     } else {
       this.logger.error(`${user.name} is not allowed to unpublish the package '${(pkg as any).name}'`);
-      cb(getUnauthorized('error, try again'), false);
+      cb(getForbidden('error, try again'), false);
     }
   }
 }
