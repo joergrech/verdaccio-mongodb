@@ -1,6 +1,7 @@
 # verdaccio-auth-mongodb
 
-> WARN: Work in progress
+> **WARN**
+> Work in progress
 
 > The MongoDB Authentication plugin for Verdaccio
 
