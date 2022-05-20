@@ -32,28 +32,27 @@ Change the `auth` section in your `config.yaml` file to include the following. R
 ```yaml
 auth:
   auth-mongodb:
-    uri: "mongodb://[username:password@]host1[:port1]"
+    uri: "mongodb://[username:password@]host1[:port1]/db"
     db: "verdaccio"
     collection: "users"
+    encryption: "bcrypt"
+    userIsUnique: true
     fields:
       username:   "username"
       password:   "password"
       usergroups: "usergroups"
-    queries:
-      add_user:    "{ username: '_USER_', password: '_PASS_', dateCreated: new Date() }"
-      update_user: "{username: '_USER_'}, { '$set': {username: '_USER_', password: '_PASS_', dateCreated: new Date() }}"
-      auth_user:   "{ username: '_USER_', password: '_PASS_' }"
 ```
 
 Configuration options
-* `uri`: The MongoDB-like URI [REQUIRED]
-* `username`: The clear-text name of the admin user who has the necessary roles or rights to insert, update, delete(?), and lookup users in a specific collection (i.e., [user-collection]). [OPTIONAL?]
-* `password`: The `bcrypt` encrypted password of the admin user [OPTIONAL?]
+* `uri`: The MongoDB-like URI including admin username, password and database holding the user collection. [REQUIRED]
 * `database`: The database in the MongoDB holding the user collection [OPTIONAL?]
-* `queries`: (based on MongoDB syntax with _USER_ and _PASS_ placeholders)
-  * `add_user`: Command to create a user in the database [OPTIONAL?]
-  * `update_user`: Command to update a user (esp. for new passwords) [OPTIONAL?]
-  * `auth_user`: Command to check if a user and password combination exists in the database [REQUIRED]
+* `username`: The clear-text name of the admin user who has the necessary roles or rights to insert, update, delete(?), and lookup users in a specific collection (i.e., [user-collection]). [OPTIONAL?]
+* `encryption`: The mechanism to encrypt the password (currently supported: `none`, `bcrypt`). Defaults to `bcrypt` [OPTIONAL?]
+* `userIsUnique`: Switch to check unique user (currently supported: `true`, `false`). Defaults to `true` [OPTIONAL?]
+* `fields`: (name of the fields in the mongodb collection)
+  * `username`: Name of the field used to store the unique username (e.g., user, username, email, etc.). Defaults to `username` [OPTIONAL]
+  * `password`: Name of the field used to store the password (e.g., pass, password, token, etc.). Defaults to `password` [OPTIONAL]
+  * `usergroups`: Name of the field used to store the array of usergroups (e.g., groups, usergroups, roles, etc.). Defaults to `usergroups` [OPTIONAL]
 
 ## development
 
