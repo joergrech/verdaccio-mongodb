@@ -37,6 +37,7 @@ auth:
     collection: "users"
     encryption: "bcrypt"
     userIsUnique: true
+    cacheTTL: 300000
     fields:
       username:   "username"
       password:   "password"
@@ -49,6 +50,7 @@ Configuration options
 * `username`: The clear-text name of the admin user who has the necessary roles or rights to insert, update, delete(?), and lookup users in a specific collection (i.e., [user-collection]). [OPTIONAL?]
 * `encryption`: The mechanism to encrypt the password (currently supported: `none`, `bcrypt`). Defaults to `bcrypt` [OPTIONAL?]
 * `userIsUnique`: Switch to check unique user (currently supported: `true`, `false`). Defaults to `true` [OPTIONAL?]
+* `cacheTTL`: Time an entry lives in the cache measured in ms. Defaults to `300000` (5 minutes) [OPTIONAL?]
 * `fields`: (name of the fields in the mongodb collection)
   * `username`: Name of the field used to store the unique username (e.g., user, username, email, etc.). Defaults to `username` [OPTIONAL]
   * `password`: Name of the field used to store the password (e.g., pass, password, token, etc.). Defaults to `password` [OPTIONAL]

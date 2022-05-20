@@ -9,12 +9,22 @@ import {
   Logger,
 } from '@verdaccio/types';
 import { getUnauthorized, getInternalError, getForbidden, getBadData } from '@verdaccio/commons-api';
+import LRU from 'lru-cache';
 
 import { CustomConfig } from '../types/index';
 import mongoConnector from '../util/mongoConnector.js';
 
 import { intersect } from './helpers';
 import { bcryptPassword, verifyPassword } from './passwords';
+import LRUCache from 'lru-cache';
+
+const cacheOptions = {
+  max: 1000,
+  ttl: 1000 * 60 * 5,
+  allowStale: false,
+  updateAgeOnGet: false,
+  updateAgeOnHas: false,
+};
 
 /**
  * Custom Verdaccio Authenticate Plugin.
@@ -22,11 +32,10 @@ import { bcryptPassword, verifyPassword } from './passwords';
 export default class MongoDBPluginAuth implements IPluginAuth<CustomConfig> {
   public logger: Logger;
   private config: CustomConfig;
-  private options: PluginOptions<CustomConfig>;
+  private cache: LRUCache<string, any>;
 
   public constructor(config: CustomConfig, options: PluginOptions<CustomConfig>) {
     this.logger = options.logger;
-    this.options = options;
     this.config = config;
 
     // Basic configuration check
@@ -62,6 +71,13 @@ export default class MongoDBPluginAuth implements IPluginAuth<CustomConfig> {
       this.config.fields.userIsUnique = true;
     }
 
+    if (!config.cacheTTL) {
+      this.logger.warn('MongoDB config for cacheTTL was not specified in the config file! Using default "5 minutes"');
+      this.config.cacheTTL = 5 * 60 * 1000;
+    }
+    cacheOptions.ttl = this.config.cacheTTL;
+    this.cache = new LRU(cacheOptions);
+
     return this;
   }
 
@@ -74,9 +90,12 @@ export default class MongoDBPluginAuth implements IPluginAuth<CustomConfig> {
   public async authenticate(username: string, password: string, cb: AuthCallback): Promise<void> {
     this.logger.debug("authenticate user '" + username + "' with password '" + password + "'");
 
-    // this.logger.info(`MongoDB: password '${password}' in bcrypt: '${bcryptPassword(password)}'`);
-
-    // Add cache for passwords with ttl (timeout)
+    this.logger.info(`MongoDB: password '${password}' in cache: '${JSON.stringify(this.cache.get(username))}'`);
+    if (verifyPassword(password, this.cache.get(username)?.password || '')) {
+      // Found user with password in cache
+      this.logger.info(`Found user '${username}' in cache!`);
+      return cb(null, this.cache.get(username).groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
+    }
 
     const client = await mongoConnector.connectToDatabase(this.config.uri);
     const db = await mongoConnector.getDb(this.config.db);
@@ -104,6 +123,12 @@ export default class MongoDBPluginAuth implements IPluginAuth<CustomConfig> {
 
         // TODO:
         // Add test cases (add user, auth, publish, unpublish, remove user?, ...): https://jestjs.io/
+
+        // Add user to cache
+        this.cache.set(username, {
+          password: firstUser[this.config.fields.password],
+          groups: groups,
+        });
 
         this.logger.info(`MongoDB: Auth succeded for '${username}' with groups: '${JSON.stringify(groups)}'`);
         return cb(null, groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!

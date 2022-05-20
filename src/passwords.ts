@@ -19,19 +19,4 @@ export function bcryptPassword(password: string): string {
  */
 export function verifyPassword(password: string, hash: string): boolean {
   return bcrypt.compareSync(password, hash);
-  // if (hash.match(/^\$2(a|b|y)\$/)) {
-  //   return bcrypt.compareSync(password, hash);
-  // } else if (hash.indexOf('{PLAIN}') === 0) {
-  //   return password === hash.substr(7);
-  // } else if (hash.indexOf('{SHA}') === 0) {
-  //   return (
-  //     crypto
-  //       .createHash('sha1')
-  //       // https://nodejs.org/api/crypto.html#crypto_hash_update_data_inputencoding
-  //       .update(password, 'utf8')
-  //       .digest('base64') === hash.substr(5)
-  //   );
-  // }
-  // // for backwards compatibility, first check md5 then check crypt3
-  // return md5(password, hash) === hash || crypt3(password, hash) === hash;
 }
