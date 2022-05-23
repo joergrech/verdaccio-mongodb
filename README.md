@@ -1,8 +1,5 @@
 # verdaccio-auth-mongodb
 
-> **WARN**
-> Work in progress
-
 > The MongoDB Authentication plugin for Verdaccio
 
 This plugin enables you to use a MongoDB or compatible database (e.g., AWS DocumentDB - currently, compatible to MongoDB 3.6 and 4.0) as the store for your user data. 

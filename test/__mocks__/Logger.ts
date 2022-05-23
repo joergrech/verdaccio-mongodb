@@ -1,6 +1,6 @@
 export default class Logger {
-  public error(message: string) {}
-  public warn(message: string) {}
-  public info(message: string) {}
-  public debug(message: string) {}
+  public error(message: string): void {}
+  public warn(message: string): void {}
+  public info(message: string): void {}
+  public debug(message: string): void {}
 }

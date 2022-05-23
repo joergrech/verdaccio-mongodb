@@ -1,6 +1,5 @@
-import LRU from 'lru-cache';
-
 import AuthMongoDB from '../src/index';
+import mongoConnector from '../util/mongoConnector.js';
 
 import Logger from './__mocks__/Logger';
 
@@ -25,7 +24,6 @@ describe('AuthMongoDB', () => {
 
   beforeEach(() => {
     process.env = { ...OLD_ENV }; // Make a copy in case default values are used
-    // @ts-ignore
     wrapper = new AuthMongoDB(config, options);
     jest.resetModules();
   });
@@ -46,8 +44,8 @@ describe('AuthMongoDB', () => {
 
   describe('authenticate()', () => {
     test("don't authenticate user with invalid credentials", done => {
-      const callbackAccessDenied = (msg, groups) => {
-        expect(msg?.message).toContain('access denied');
+      const callbackAccessDenied = (error, groups): void => {
+        expect(error?.message).toContain('access denied');
         expect(groups).toBeFalsy();
         done();
       };
@@ -57,9 +55,9 @@ describe('AuthMongoDB', () => {
     });
 
     test('authenticate user with valid credentials', done => {
-      const callbackFromDB = (msg, b) => {
-        expect(msg).toContain('in database');
-        expect(b).toContain('testgroup');
+      const callbackFromDB = (error, groups): void => {
+        expect(error).toBeNull();
+        expect(groups).toContain('testgroup');
         done();
       };
       wrapper.authenticate('testuser', 'password4711', callbackFromDB);
@@ -68,9 +66,9 @@ describe('AuthMongoDB', () => {
       // expect(wrapper.cache).toEqual(expect.anything());
       // expect(wrapper.cache).toEqual(expect.any(LRU));
       // // expect(wrapper.cache.has('testuser')).toBeTruthy(); // Does not work
-      // const callbackFromCache = (msg, b) => {
-      //   expect(msg).toContain('in cache');
-      //   expect(b).toContain('testgroup');
+      // const callbackFromCache = (error, groups): void => {
+      //   expect(error).toContain('in cache'); Does not work as error can only be error (getCode does not work - is used as fail in verdaccio)
+      //   expect(groups).toContain('testgroup');
       //   done();
       // };
       // wrapper.authenticate('testuser', 'password4711', callbackFromCache);
@@ -79,8 +77,8 @@ describe('AuthMongoDB', () => {
 
   describe('changePassword()', () => {
     test('should never work', done => {
-      const callback = (msg, isSuccess) => {
-        expect(msg.message).toContain('not allowed');
+      const callback = (error, isSuccess): void => {
+        expect(error.message).toContain('not allowed');
         expect(isSuccess).toBeFalsy();
         done();
       };
@@ -90,23 +88,23 @@ describe('AuthMongoDB', () => {
 
   describe('addUser()', () => {
     test('do not pass sanity check if invalid', done => {
-      wrapper.adduser('jo', 'username to short', (a, b) => {
-        expect(a?.message).toContain('too short');
-        expect(b).toBeFalsy();
+      wrapper.adduser('jo', 'username to short', (error, groups) => {
+        expect(error?.message).toContain('too short');
+        expect(groups).toBeFalsy();
         // done(); // due to "Expected done to be called once, but it was called multiple times."
       });
-      wrapper.adduser('password to short', '123', (a, b) => {
+      wrapper.adduser('password to short', '123', (a, groups) => {
         expect(a?.message).toContain('too short');
-        expect(b).toBeFalsy();
+        expect(groups).toBeFalsy();
       });
       done();
     });
 
     test('do not add duplicate users', done => {
       // TODO: check if username is inserted a second time with config.userIsUnique == false
-      const callbackDuplicate = (a, b) => {
-        expect(a.message).toContain('already exists');
-        expect(b).toBeTruthy();
+      const callbackDuplicate = (error, groups): void => {
+        expect(error.message).toContain('already exists');
+        expect(groups).toBeTruthy();
         done();
       };
       wrapper.adduser('testuser', 'username already exists', callbackDuplicate);
@@ -117,31 +115,38 @@ describe('AuthMongoDB', () => {
       newConfig.userIsUnique = false;
       wrapper = new AuthMongoDB(newConfig, options);
 
-      const callbackDuplicate = (a, b) => {
-        expect(a.message).toContain('already exists');
-        expect(b).toBeTruthy();
+      const callbackDuplicate = (error, groups): void => {
+        expect(error.message).toContain('already exists');
+        expect(groups).toBeTruthy();
         done();
       };
       wrapper.adduser('testuser', 'username already exists', callbackDuplicate);
     });
 
-    test('add new user with valid data', done => {
-      const callback = (a, b) => {
-        expect(a).toContain('Inserted new user in MongoDB');
-        expect(b).toBeTruthy();
-        done();
+    test('add new user with valid data', async () => {
+      const callback = (error, groups): void => {
+        expect(error).toBeNull();
+        expect(groups).toBeTruthy();
       };
       const randomUsername = `deleteme_${(Math.random() + 1).toString(36).substring(2)}`;
       const randomPassword = `deleteme_${(Math.random() + 1).toString(36).substring(2)}`;
-      wrapper.adduser(randomUsername, randomPassword, callback);
+      await wrapper.adduser(randomUsername, randomPassword, callback);
+
+      // Cleanup Database
+      const client = await mongoConnector.connectToDatabase(config?.uri);
+      const db = await mongoConnector.getDb(config?.db);
+      await client.connect();
+      const users = await db.collection(config?.collection);
+      const query = `{ "${config?.fields?.username}": { "$regex": "deleteme_.*" } }`;
+      await users.deleteMany(JSON.parse(query));
     });
   });
 
   // describe('allow_access()', () => {
   //   // TODO: mock PackageAccess
   //   test('allow if user has direct access', done => {
-  //     const callback = (msg, isSuccess) => {
-  //       expect(msg.message).toContain('not allowed');
+  //     const callback = (error, isSuccess) => {
+  //       expect(error.message).toContain('not allowed');
   //       expect(isSuccess).toBeFalsy();
   //       done();
   //     };

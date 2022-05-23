@@ -8,14 +8,14 @@ import {
   RemoteUser,
   Logger,
 } from '@verdaccio/types';
-import { getUnauthorized, getInternalError, getForbidden, getBadData, getCode } from '@verdaccio/commons-api';
+import { getUnauthorized, getInternalError, getForbidden, getBadData } from '@verdaccio/commons-api';
 import LRU from 'lru-cache';
 
 import { CustomConfig } from '../types/index';
 import mongoConnector from '../util/mongoConnector.js';
 
 import { intersect } from './helpers';
-import { bcryptPassword, verifyPassword } from './password';
+import { verifyPassword } from './password';
 
 const cacheOptions = {
   max: 1000,
@@ -107,7 +107,7 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
     if (verifyPassword(password, this.cache.get(username)?.password || '')) {
       // Found user with password in cache
       this.logger.debug(`auth-mongodb: Found user '${username}' in cache!`);
-      return cb(`Found user '${username}' in cache!`, this.cache.get(username).groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
+      return cb(null, this.cache.get(username).groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
       // return cb(getCode(200, `Found user '${username}' in cache!`), this.cache.get(username).groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
     }
 
@@ -142,7 +142,7 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
         });
 
         this.logger.debug(`auth-mongodb: Auth succeded for '${username}' with groups: '${JSON.stringify(groups)}'`);
-        cb(`Found user '${username}' in database!`, groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
+        cb(null, groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
         // cb(getCode(200, `Found user '${username}' in database!`), groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
       }
     } catch (e) {
@@ -206,7 +206,7 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
       const insertQuery = `{ "${this.config?.fields?.username}": "${username}", "${this.config?.fields?.password}": "${password}", "usergroups": ["user"] }`;
       const newUser = await users.insertOne(JSON.parse(insertQuery));
       this.logger.info(`auth-mongodb: Added new user: ${JSON.stringify(newUser)}`);
-      cb(`Inserted new user in MongoDB`, true);
+      cb(null, true);
     } catch (e) {
       const error = e.toString();
       if (error.includes('duplicate key error')) {
