@@ -10,13 +10,12 @@ import {
 } from '@verdaccio/types';
 import { getUnauthorized, getInternalError, getForbidden, getBadData, getCode } from '@verdaccio/commons-api';
 import LRU from 'lru-cache';
-import LRUCache from 'lru-cache';
 
 import { CustomConfig } from '../types/index';
 import mongoConnector from '../util/mongoConnector.js';
 
 import { intersect } from './helpers';
-import { bcryptPassword, verifyPassword } from './passwords';
+import { bcryptPassword, verifyPassword } from './password';
 
 const cacheOptions = {
   max: 1000,
@@ -29,58 +28,69 @@ const cacheOptions = {
 /**
  * Custom Verdaccio Authenticate Plugin.
  */
-export default class MongoDBPluginAuth implements IPluginAuth<CustomConfig> {
+export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
   public logger: Logger;
   private config: CustomConfig;
-  private cache: LRUCache<string, any>;
+  public cache: LRU<string, any>;
 
   public constructor(config: CustomConfig, options: PluginOptions<CustomConfig>) {
     this.logger = options.logger;
     this.config = config;
 
     // Basic configuration check
+    let requiredConfigMissing = false;
     if (!config.uri) {
-      this.logger.error('auth-mongodb: URI was not specified in the config file!');
+      this.logger.error('auth-mongodb: Required URI was not specified in the config file!');
+      requiredConfigMissing = true;
     }
     if (!config.db) {
-      this.logger.error('auth-mongodb: DB was not specified in the config file!');
+      this.logger.error('auth-mongodb: Required DB was not specified in the config file!');
+      requiredConfigMissing = true;
     }
     if (!config.collection) {
-      this.logger.error('auth-mongodb: Collection was not specified in the config file!');
+      this.logger.error('auth-mongodb: Required Collection was not specified in the config file!');
+      requiredConfigMissing = true;
     }
-    if (!config.fields.username) {
-      this.logger.warn(
-        'auth-mongodb: Field name for username was not specified in the config file! Using default "username"'
+    if (!this.config.fields) {
+      this.config.fields = {};
+    }
+    if (!config.fields?.username) {
+      this.logger.info(
+        'auth-mongodb: Optional field username was not specified in the config file! Using default "username"'
       );
       this.config.fields.username = 'username';
     }
-    if (!config.fields.password) {
-      this.logger.warn(
-        'auth-mongodb: Field name for password was not specified in the config file! Using default "password"'
+    if (!config.fields?.password) {
+      this.logger.info(
+        'auth-mongodb: Optional field password was not specified in the config file! Using default "password"'
       );
       this.config.fields.password = 'password';
     }
-    if (!config.fields.usergroups) {
-      this.logger.warn(
-        'auth-mongodb: Field name for usergroups was not specified in the config file! Using default "usergroups"'
+    if (!config.fields?.usergroups) {
+      this.logger.info(
+        'auth-mongodb: Optional field usergroups was not specified in the config file! Using default "usergroups"'
       );
       this.config.fields.usergroups = 'usergroups';
     }
     if (config.userIsUnique === undefined || (config.userIsUnique !== true && config.userIsUnique !== false)) {
-      this.logger.warn(
-        'auth-mongodb: Config for userIsUnique was not specified in the config file! Using default "true"'
+      this.logger.info(
+        'auth-mongodb: Optional field userIsUnique was not specified in the config file! Using default "true"'
       );
-      this.config.fields.userIsUnique = true;
+      this.config.userIsUnique = true;
     }
 
     if (!config.cacheTTL) {
-      this.logger.warn(
-        'auth-mongodb: Config for cacheTTL was not specified in the config file! Using default "5 minutes"'
+      this.logger.info(
+        'auth-mongodb: Optional field cacheTTL was not specified in the config file! Using default "5 minutes"'
       );
       this.config.cacheTTL = 5 * 60 * 1000;
     }
     cacheOptions.ttl = this.config.cacheTTL;
     this.cache = new LRU(cacheOptions);
+
+    if (requiredConfigMissing) {
+      throw new Error('must specify "uri", "db", and "collection" in config');
+    }
 
     return this;
   }
@@ -94,22 +104,20 @@ export default class MongoDBPluginAuth implements IPluginAuth<CustomConfig> {
   public async authenticate(username: string, password: string, cb: AuthCallback): Promise<void> {
     this.logger.debug("auth-mongodb: Authenticate user '" + username + "' with password '" + password + "'");
 
-    // this.logger.info(bcryptPassword(password)); 
-
     if (verifyPassword(password, this.cache.get(username)?.password || '')) {
       // Found user with password in cache
       this.logger.debug(`auth-mongodb: Found user '${username}' in cache!`);
-      return cb(null, this.cache.get(username).groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
+      return cb(getCode(200, `Found user '${username}' in cache!`), this.cache.get(username).groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
     }
 
-    const client = await mongoConnector.connectToDatabase(this.config.uri);
-    const db = await mongoConnector.getDb(this.config.db);
+    const client = await mongoConnector.connectToDatabase(this.config?.uri);
+    const db = await mongoConnector.getDb(this.config?.db);
 
     try {
       await client.connect();
-      const users = (await db).collection(this.config.collection);
-      const authQuery = `{ "${this.config.fields.username}": "${username}" }`;
-      const authOptions = `{ "projection": { "_id": 0, "${this.config.fields.username}": 1, "${this.config.fields.password}": 1, "${this.config.fields.usergroups}": 1 } }`;
+      const users = await db.collection(this.config?.collection);
+      const authQuery = `{ "${this.config?.fields?.username}": "${username}" }`;
+      const authOptions = `{ "projection": { "_id": 0, "${this.config?.fields?.username}": 1, "${this.config?.fields?.password}": 1, "${this.config?.fields?.usergroups}": 1 } }`;
 
       const foundUsers = await users.find(JSON.parse(authQuery), JSON.parse(authOptions));
       const firstUser = await foundUsers.next();
@@ -117,32 +125,30 @@ export default class MongoDBPluginAuth implements IPluginAuth<CustomConfig> {
       if (
         !firstUser ||
         Object.keys(firstUser).length === 0 ||
-        !verifyPassword(password, firstUser[this.config.fields.password])
+        !verifyPassword(password, firstUser[this.config?.fields?.password])
       ) {
         cb(getUnauthorized(`bad username/password, access denied for username '${username}'!`), false);
       } else {
         let groups: string[] = ['user'];
-        if (firstUser[this.config.fields.usergroups] && firstUser[this.config.fields.usergroups] !== undefined) {
-          groups = firstUser[this.config.fields.usergroups];
+        if (firstUser[this.config?.fields?.usergroups] && firstUser[this.config?.fields?.usergroups] !== undefined) {
+          groups = firstUser[this.config?.fields?.usergroups];
         }
-
-        // TODO:
-        // Add test cases (add user, auth, publish, unpublish, remove user?, ...): https://jestjs.io/
 
         // Add user to cache
         this.cache.set(username, {
-          password: firstUser[this.config.fields.password],
+          password: firstUser[this.config?.fields?.password],
           groups: groups,
         });
 
         this.logger.debug(`auth-mongodb: Auth succeded for '${username}' with groups: '${JSON.stringify(groups)}'`);
-        return cb(null, groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
+        cb(`Found user '${username}' in database!`, groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
       }
     } catch (e) {
       this.logger.error(e);
       cb(getInternalError('error, try again: ' + e), false);
     } finally {
       await client.close();
+      await mongoConnector.disposeConnection();
     }
   }
 
@@ -153,11 +159,9 @@ export default class MongoDBPluginAuth implements IPluginAuth<CustomConfig> {
    * @param newPassword new password
    * @param cb callback function
    */
-  public changePassword(username: string, password: string, newPassword: string, cb: Callback) {
+  public changePassword(username: string, password: string, newPassword: string, cb: Callback): Promise<void> {
     this.logger.warn(`auth-mongodb: changePassword called for user: ${username}`);
-    return cb(
-      getInternalError('You are not allowed to change the password here! Please change your password via the webapp!')
-    );
+    return cb(getInternalError('You are not allowed to change the password via verdaccio!'), false);
   }
 
   /**
@@ -175,40 +179,43 @@ export default class MongoDBPluginAuth implements IPluginAuth<CustomConfig> {
       return cb(getBadData(`Bad password, password is too short (min 8 characters)!`), false);
     }
 
-    const client = await mongoConnector.connectToDatabase(this.config.uri);
-    const db = await mongoConnector.getDb(this.config.db);
+    const client = await mongoConnector.connectToDatabase(this.config?.uri);
+    const db = await mongoConnector.getDb(this.config?.db);
 
     try {
       await client.connect();
-      const users = (await db).collection(this.config.collection);
-      const lookupQuery = `{ "${this.config.fields.username}": "${username}" }`;
-      const lookupOptions = `{ "projection": { "_id": 0, "${this.config.fields.username}": 1, "${this.config.fields.usergroups}": 1 } }`;
+      const users = await db.collection(this.config?.collection);
+      const lookupQuery = `{ "${this.config?.fields?.username}": "${username}" }`;
+      const lookupOptions = `{ "projection": { "_id": 0, "${this.config?.fields?.username}": 1, "${this.config?.fields?.usergroups}": 1 } }`;
 
-      if (!this.config.userIsUnique || this.config.userIsUnique == undefined) {
+      if (!this.config?.userIsUnique || this.config?.userIsUnique == undefined) {
         // Check if user already exist - not necessary with uniqueIndex
         const foundUsers = await users.find(JSON.parse(lookupQuery), JSON.parse(lookupOptions));
         const firstUser = await foundUsers.next();
         if (firstUser) {
-          return cb(null, true);
-          // return cb(getForbidden(`Bad username, user '${username}' already exists!`), false);
+          await client.close();
+          await mongoConnector.disposeConnection();
+          // return cb(null, true);
+          return cb(getForbidden(`Bad username, user '${username}' already exists!`), true);
         }
       }
 
       // Trying to insert user - will throw exception if duplicate username already exists
-      const insertQuery = `{ "${this.config.fields.username}": "${username}", "${this.config.fields.password}": "${password}", "usergroups": ["user"] }`;
+      const insertQuery = `{ "${this.config?.fields?.username}": "${username}", "${this.config?.fields?.password}": "${password}", "usergroups": ["user"] }`;
       const newUser = await users.insertOne(JSON.parse(insertQuery));
       this.logger.info(`auth-mongodb: Added new user: ${JSON.stringify(newUser)}`);
-      cb(null, true);
+      cb(`Inserted new user in MongoDB`, true);
     } catch (e) {
       const error = e.toString();
       if (error.includes('duplicate key error')) {
-        cb(null, true);
-        // cb(getForbidden(`Bad username, user '${username}' already exists!`), false);
+        // cb(null, true);
+        cb(getForbidden(`Bad username, user '${username}' already exists!`), true);
       } else {
         cb(getInternalError('Error with adding user to MongoDB: ' + typeof e), false);
       }
     } finally {
       await client.close();
+      await mongoConnector.disposeConnection();
     }
   }
 

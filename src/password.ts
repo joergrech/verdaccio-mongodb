@@ -13,6 +13,7 @@ export function bcryptPassword(password: string): string {
 
 /**
  * verifyPassword - matches password and it's hash.
+ * NOTE: bcrypt.compareSync is intentionally slow!
  * @param {string} password
  * @param {string} hash
  * @returns {boolean}
