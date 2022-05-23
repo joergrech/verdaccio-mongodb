@@ -1,7 +1,7 @@
 storage: './test-storage'
 listen: 'http://localhost:1443/'
 auth:
-  auth-mongodb:
+  mongodb:
     uri: "mongodb+srv://<USER>:<PASS>@<HOST>/<DB>"
     db: "<DB>"
     collection: "users"

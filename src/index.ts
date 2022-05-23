@@ -40,15 +40,15 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
     // Basic configuration check
     let requiredConfigMissing = false;
     if (!config.uri) {
-      this.logger.error('auth-mongodb: Required URI was not specified in the config file!');
+      this.logger.error('mongodb: Required URI was not specified in the config file!');
       requiredConfigMissing = true;
     }
     if (!config.db) {
-      this.logger.error('auth-mongodb: Required DB was not specified in the config file!');
+      this.logger.error('mongodb: Required DB was not specified in the config file!');
       requiredConfigMissing = true;
     }
     if (!config.collection) {
-      this.logger.error('auth-mongodb: Required Collection was not specified in the config file!');
+      this.logger.error('mongodb: Required Collection was not specified in the config file!');
       requiredConfigMissing = true;
     }
     if (!this.config.fields) {
@@ -56,32 +56,32 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
     }
     if (!config.fields?.username) {
       this.logger.info(
-        'auth-mongodb: Optional field username was not specified in the config file! Using default "username"'
+        'mongodb: Optional field username was not specified in the config file! Using default "username"'
       );
       this.config.fields.username = 'username';
     }
     if (!config.fields?.password) {
       this.logger.info(
-        'auth-mongodb: Optional field password was not specified in the config file! Using default "password"'
+        'mongodb: Optional field password was not specified in the config file! Using default "password"'
       );
       this.config.fields.password = 'password';
     }
     if (!config.fields?.usergroups) {
       this.logger.info(
-        'auth-mongodb: Optional field usergroups was not specified in the config file! Using default "usergroups"'
+        'mongodb: Optional field usergroups was not specified in the config file! Using default "usergroups"'
       );
       this.config.fields.usergroups = 'usergroups';
     }
     if (config.userIsUnique === undefined || (config.userIsUnique !== true && config.userIsUnique !== false)) {
       this.logger.info(
-        'auth-mongodb: Optional field userIsUnique was not specified in the config file! Using default "true"'
+        'mongodb: Optional field userIsUnique was not specified in the config file! Using default "true"'
       );
       this.config.userIsUnique = true;
     }
 
     if (!config.cacheTTL) {
       this.logger.info(
-        'auth-mongodb: Optional field cacheTTL was not specified in the config file! Using default "5 minutes"'
+        'mongodb: Optional field cacheTTL was not specified in the config file! Using default "5 minutes"'
       );
       this.config.cacheTTL = 5 * 60 * 1000;
     }
@@ -102,11 +102,11 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
    * @param cb callback function
    */
   public async authenticate(username: string, password: string, cb: AuthCallback): Promise<void> {
-    this.logger.debug("auth-mongodb: Authenticate user '" + username + "' with password '" + password + "'");
+    this.logger.debug("mongodb: Authenticate user '" + username + "' with password '" + password + "'");
 
     if (verifyPassword(password, this.cache.get(username)?.password || '')) {
       // Found user with password in cache
-      this.logger.debug(`auth-mongodb: Found user '${username}' in cache!`);
+      this.logger.debug(`mongodb: Found user '${username}' in cache!`);
       return cb(null, this.cache.get(username).groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
       // return cb(getCode(200, `Found user '${username}' in cache!`), this.cache.get(username).groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
     }
@@ -141,7 +141,7 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
           groups: groups,
         });
 
-        this.logger.debug(`auth-mongodb: Auth succeded for '${username}' with groups: '${JSON.stringify(groups)}'`);
+        this.logger.debug(`mongodb: Auth succeded for '${username}' with groups: '${JSON.stringify(groups)}'`);
         cb(null, groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
         // cb(getCode(200, `Found user '${username}' in database!`), groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
       }
@@ -162,7 +162,7 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
    * @param cb callback function
    */
   public changePassword(username: string, password: string, newPassword: string, cb: Callback): Promise<void> {
-    this.logger.warn(`auth-mongodb: changePassword called for user: ${username}`);
+    this.logger.warn(`mongodb: changePassword called for user: ${username}`);
     return cb(getInternalError('You are not allowed to change the password via verdaccio!'), false);
   }
 
@@ -205,7 +205,7 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
       // Trying to insert user - will throw exception if duplicate username already exists
       const insertQuery = `{ "${this.config?.fields?.username}": "${username}", "${this.config?.fields?.password}": "${password}", "usergroups": ["user"] }`;
       const newUser = await users.insertOne(JSON.parse(insertQuery));
-      this.logger.info(`auth-mongodb: Added new user: ${JSON.stringify(newUser)}`);
+      this.logger.info(`mongodb: Added new user: ${JSON.stringify(newUser)}`);
       cb(null, true);
     } catch (e) {
       const error = e.toString();
@@ -231,10 +231,10 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
   public allow_access(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
     const groupsIntersection = intersect(user.groups, pkg?.access || []);
     if (pkg?.access?.includes[user.name || ''] || groupsIntersection.length > 0) {
-      this.logger.debug(`auth-mongodb: ${user.name} has been granted access to package '${(pkg as any).name}'`);
+      this.logger.debug(`mongodb: ${user.name} has been granted access to package '${(pkg as any).name}'`);
       cb(null, true);
     } else {
-      this.logger.error(`auth-mongodb: ${user.name} is not allowed to access the package '${(pkg as any).name}'`);
+      this.logger.error(`mongodb: ${user.name} is not allowed to access the package '${(pkg as any).name}'`);
       cb(getForbidden('error, try again'), false);
     }
   }
@@ -250,11 +250,11 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
     const groupsIntersection = intersect(user.groups, pkg?.publish || []);
     if (pkg?.publish?.includes[user.name || ''] || groupsIntersection.length > 0) {
       this.logger.debug(
-        `auth-mongodb: ${user.name} has been granted the right to publish the package '${(pkg as any).name}'`
+        `mongodb: ${user.name} has been granted the right to publish the package '${(pkg as any).name}'`
       );
       cb(null, true);
     } else {
-      this.logger.error(`auth-mongodb: ${user.name} is not allowed to publish the package '${(pkg as any).name}'`);
+      this.logger.error(`mongodb: ${user.name} is not allowed to publish the package '${(pkg as any).name}'`);
       cb(getForbidden('error, try again'), false);
     }
   }
@@ -270,11 +270,11 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
     const groupsIntersection = intersect(user.groups, pkg?.publish || []);
     if (pkg?.publish?.includes[user.name || ''] || groupsIntersection.length > 0) {
       this.logger.debug(
-        `auth-mongodb: ${user.name} has been granted the right to unpublish the package '${(pkg as any).name}'`
+        `mongodb: ${user.name} has been granted the right to unpublish the package '${(pkg as any).name}'`
       );
       cb(null, true);
     } else {
-      this.logger.error(`auth-mongodb: ${user.name} is not allowed to unpublish the package '${(pkg as any).name}'`);
+      this.logger.error(`mongodb: ${user.name} is not allowed to unpublish the package '${(pkg as any).name}'`);
       cb(getForbidden('error, try again'), false);
     }
   }

@@ -1,4 +1,4 @@
-# verdaccio-auth-mongodb
+# verdaccio-mongodb
 
 > The MongoDB Authentication plugin for Verdaccio
 
@@ -12,7 +12,7 @@ This is especially useful if you want to use an existing user database, if you h
 Add the MongoDB auth plugin to your Verdaccio installation like this:
 
 ```shell
-npm install -g verdaccio-auth-mongodb
+npm install -g verdaccio-mongodb
 ```
 
 ### Setup Database
@@ -28,7 +28,7 @@ Change the `auth` section in your `config.yaml` file to include the following. R
 
 ```yaml
 auth:
-  auth-mongodb:
+  mongodb:
     uri: "mongodb://[username:password@]host1[:port1]/db"
     db: "verdaccio"
     collection: "users"
