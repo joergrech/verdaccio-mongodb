@@ -1,11 +1,16 @@
 storage: './test-storage'
 listen: 'http://localhost:1443/'
 auth:
-  htpasswd:
-    file: ./htpasswd
-    # Maximum amount of users allowed to register, defaults to "+inf".
-    # You can set this to -1 to disable registration.
-    max_users: 1000
+  auth-mongodb:
+    uri: "mongodb+srv://<USER>:<PASS>@<HOST>/<DB>"
+    db: "<DB>"
+    collection: "users"
+    encryption: "bcrypt"
+    userIsUnique: true
+    fields:
+      username:   "username"
+      password:   "password"
+      usergroups: "usergroups"
 
 # a list of other known repositories we can talk to
 uplinks:
