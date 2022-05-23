@@ -53,3 +53,5 @@ Configuration options
   * `password`: Name of the field used to store the password (e.g., pass, password, token, etc.). Defaults to `password` [OPTIONAL]
   * `usergroups`: Name of the field used to store the array of usergroups (e.g., groups, usergroups, roles, etc.). Defaults to `usergroups` [OPTIONAL]
 
+## NOTES
+An alternative verdaccio auth plugin exists called `verdaccio-auth-mongo`: see https://www.npmjs.com/package/verdaccio-auth-mongo and https://gitlab.com/stack-library-open/verdaccio-auth-mongo/-/blob/master/index.js
