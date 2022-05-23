@@ -107,7 +107,8 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
     if (verifyPassword(password, this.cache.get(username)?.password || '')) {
       // Found user with password in cache
       this.logger.debug(`auth-mongodb: Found user '${username}' in cache!`);
-      return cb(getCode(200, `Found user '${username}' in cache!`), this.cache.get(username).groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
+      return cb(`Found user '${username}' in cache!`, this.cache.get(username).groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
+      // return cb(getCode(200, `Found user '${username}' in cache!`), this.cache.get(username).groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
     }
 
     const client = await mongoConnector.connectToDatabase(this.config?.uri);
@@ -142,6 +143,7 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
 
         this.logger.debug(`auth-mongodb: Auth succeded for '${username}' with groups: '${JSON.stringify(groups)}'`);
         cb(`Found user '${username}' in database!`, groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
+        // cb(getCode(200, `Found user '${username}' in database!`), groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
       }
     } catch (e) {
       this.logger.error(e);
