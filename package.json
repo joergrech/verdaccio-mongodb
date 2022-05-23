@@ -1,7 +1,18 @@
 {
   "name": "verdaccio-auth-mongodb",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "MongoDB Authentication plugin for Verdaccio",
+  "author": "Jörg Rech <joerg.rech@gmail.com>",
+  "license": "MIT",
+  "repository": "joergrech/verdaccio-auth-mongodb",
+  "keywords": [
+    "Authentication",
+    "Auth",
+    "Plugin",
+    "Verdaccio",
+    "MongoDB",
+    "DocumentDB"
+  ],
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "files": [
@@ -18,29 +29,18 @@
   },
   "devDependencies": {
     "@types/express": "^4.17.1",
-    "@types/jest": "^24.0.21",
+    "@types/jest": "^27.5.1",
     "@types/node": "^12.12.5",
     "@typescript-eslint/eslint-plugin": "^2.12.0",
-    "@verdaccio/babel-preset": "^9.6.1",
+    "@verdaccio/babel-preset": "^10.0.0",
     "@verdaccio/eslint-config": "^9.3.2",
     "@verdaccio/types": "^9.5.0",
     "eslint": "^6.6.0",
-    "jest": "^26.0.1 ",
+    "jest": "^28.1.0",
     "prettier": "^1.19.1",
     "standard-version": "^9.5.0",
     "typescript": "^3.9.5"
   },
-  "keywords": [
-    "Authentication",
-    "Auth",
-    "Plugin",
-    "Verdaccio",
-    "MongoDB",
-    "DocumentDB"
-  ],
-  "license": "MIT",
-  "repository": "joergrech/verdaccio-auth-mongodb",
-  "author": "Jörg Rech <joerg.rech@gmail.com>",
   "scripts": {
     "release": "standard-version -a -s",
     "build": "npm run build:types && npm run build:js",

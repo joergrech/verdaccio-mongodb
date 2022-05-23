@@ -1,289 +1,161 @@
-// @ts-ignore
-import fs from 'fs';
+import LRU from 'lru-cache';
 
-import HTPasswd from '../src/htpasswd';
-import Logger from './_mocks/Logger';
-import Config from './_mocks/Config';
+import AuthMongoDB from '../src/index';
 
-const stuff = {
-  logger: new Logger(),
-  config: new Config()
-};
+import Logger from './__mocks__/Logger';
 
-const config = {
-  file: './htpasswd',
-  max_users: 1000
-};
-
-describe('HTPasswd', () => {
+describe('AuthMongoDB', () => {
+  const OLD_ENV = process.env;
+  const config = {
+    max_users: 1000,
+    uri: process.env.MONGODB_URI, // NOTE: use .env file in root of this project with 'mongodb+srv://<USER>:<PASS>@<HOST>/<DB>' etc.
+    db: process.env.MONGODB_DB,
+    collection: process.env.MONGODB_COLLECTION,
+    encryption: 'bcrypt',
+    userIsUnique: true,
+    cacheTTL: 300000,
+    fields: {
+      username: 'username',
+      password: 'password',
+      usergroups: 'usergroups',
+    },
+  };
+  const options = { config: {}, logger: new Logger() };
   let wrapper;
 
   beforeEach(() => {
+    process.env = { ...OLD_ENV }; // Make a copy in case default values are used
     // @ts-ignore
-    wrapper = new HTPasswd(config, stuff);
+    wrapper = new AuthMongoDB(config, options);
     jest.resetModules();
   });
 
+  afterAll(done => {
+    // Closing the DB connection allows Jest to exit successfully.
+    wrapper.cached?.conn?.close();
+    done();
+  });
+
   describe('constructor()', () => {
-    test('should files whether file path does not exist', () => {
+    test('throw Error if required configs are missing', () => {
       expect(function() {
-        new HTPasswd(
-          {},
-          // @ts-ignore
-          {
-            config: {}
-          }
-        );
-      }).toThrow(/should specify "file" in config/);
+        new AuthMongoDB({}, { config: {}, logger: new Logger() });
+      }).toThrow(/must specify "uri", "db", and "collection" in config/);
     });
   });
 
   describe('authenticate()', () => {
-    test('it should authenticate user with given credentials', done => {
-      const callbackTest = (a, b) => {
-        expect(a).toBeNull();
-        expect(b).toContain('test');
+    test("don't authenticate user with invalid credentials", done => {
+      const callbackAccessDenied = (msg, groups) => {
+        expect(msg?.message).toContain('access denied');
+        expect(groups).toBeFalsy();
         done();
       };
-      const callbackUsername = (a, b) => {
-        expect(a).toBeNull();
-        expect(b).toContain('username');
-        done();
-      };
-      wrapper.authenticate('test', 'test', callbackTest);
-      wrapper.authenticate('username', 'password', callbackUsername);
+      wrapper.authenticate('nonexistantuser', 'n/a', callbackAccessDenied);
+      // wrapper.authenticate(null, 'n/a', callbackAccessDenied);
+      // wrapper.authenticate(123, 'n/a', callbackAccessDenied);
     });
 
-    test('it should not authenticate user with given credentials', done => {
-      const callback = (a, b) => {
-        expect(a).toBeNull();
-        expect(b).toBeFalsy();
+    test('authenticate user with valid credentials', done => {
+      const callbackFromDB = (msg, b) => {
+        expect(msg).toContain('in database');
+        expect(b).toContain('testgroup');
         done();
       };
-      wrapper.authenticate('test', 'somerandompassword', callback);
+      wrapper.authenticate('testuser', 'password4711', callbackFromDB);
+
+      // TODO: Test cache authentication:
+      // expect(wrapper.cache).toEqual(expect.anything());
+      // expect(wrapper.cache).toEqual(expect.any(LRU));
+      // // expect(wrapper.cache.has('testuser')).toBeTruthy(); // Does not work
+      // const callbackFromCache = (msg, b) => {
+      //   expect(msg).toContain('in cache');
+      //   expect(b).toContain('testgroup');
+      //   done();
+      // };
+      // wrapper.authenticate('testuser', 'password4711', callbackFromCache);
+    });
+  });
+
+  describe('changePassword()', () => {
+    test('should never work', done => {
+      const callback = (msg, isSuccess) => {
+        expect(msg.message).toContain('not allowed');
+        expect(isSuccess).toBeFalsy();
+        done();
+      };
+      wrapper.changePassword('username', 'password', 'newPassword', callback);
     });
   });
 
   describe('addUser()', () => {
-    test('it should not pass sanity check', done => {
-      const callback = (a, b) => {
-        expect(a.message).toEqual('unauthorized access');
-        done();
-      };
-      wrapper.adduser('test', 'somerandompassword', callback);
+    test('do not pass sanity check if invalid', done => {
+      wrapper.adduser('jo', 'username to short', (a, b) => {
+        expect(a?.message).toContain('too short');
+        expect(b).toBeFalsy();
+        // done(); // due to "Expected done to be called once, but it was called multiple times."
+      });
+      wrapper.adduser('password to short', '123', (a, b) => {
+        expect(a?.message).toContain('too short');
+        expect(b).toBeFalsy();
+      });
+      done();
     });
 
-    test('it should add the user', done => {
-      let dataToWrite;
-      // @ts-ignore
-      fs.writeFile = jest.fn((name, data, callback) => {
-        dataToWrite = data;
-        callback();
-      });
-      const callback = (a, b) => {
-        expect(a).toBeNull();
+    test('do not add duplicate users', done => {
+      // TODO: check if username is inserted a second time with config.userIsUnique == false
+      const callbackDuplicate = (a, b) => {
+        expect(a.message).toContain('already exists');
         expect(b).toBeTruthy();
-        expect(fs.writeFile).toHaveBeenCalled();
-        expect(dataToWrite.indexOf('usernotpresent')).not.toEqual(-1);
         done();
       };
-      wrapper.adduser('usernotpresent', 'somerandompassword', callback);
+      wrapper.adduser('testuser', 'username already exists', callbackDuplicate);
     });
 
-    describe('addUser() error handling', () => {
-      test('sanityCheck should return an Error', done => {
-        jest.doMock('../src/utils.ts', () => {
-          return {
-            sanityCheck: () => Error('some error')
-          };
-        });
+    test('do not add duplicate users when userIsUnique == false', done => {
+      const newConfig = config;
+      newConfig.userIsUnique = false;
+      wrapper = new AuthMongoDB(newConfig, options);
 
-        const HTPasswd = require('../src/htpasswd.ts').default;
-        const wrapper = new HTPasswd(config, stuff);
-        wrapper.adduser('sanityCheck', 'test', (sanity, foo) => {
-          expect(sanity.message).toBeDefined();
-          expect(sanity.message).toMatch('some error');
-          done();
-        });
-      });
-
-      test('lockAndRead should return an Error', done => {
-        jest.doMock('../src/utils.ts', () => {
-          return {
-            sanityCheck: () => null,
-            lockAndRead: (a, b) => b(new Error('lock error'))
-          };
-        });
-
-        const HTPasswd = require('../src/htpasswd.ts').default;
-        const wrapper = new HTPasswd(config, stuff);
-        wrapper.adduser('lockAndRead', 'test', (sanity, foo) => {
-          expect(sanity.message).toBeDefined();
-          expect(sanity.message).toMatch('lock error');
-          done();
-        });
-      });
-
-      test('addUserToHTPasswd should return an Error', done => {
-        jest.doMock('../src/utils.ts', () => {
-          return {
-            sanityCheck: () => null,
-            parseHTPasswd: () => {},
-            lockAndRead: (a, b) => b(null, ''),
-            unlockFile: (a, b) => b()
-          };
-        });
-
-        const HTPasswd = require('../src/htpasswd.ts').default;
-        const wrapper = new HTPasswd(config, stuff);
-        wrapper.adduser('addUserToHTPasswd', 'test', (sanity, foo) => {
-          done();
-        });
-      });
-
-      test('writeFile should return an Error', done => {
-        jest.doMock('../src/utils.ts', () => {
-          return {
-            sanityCheck: () => null,
-            parseHTPasswd: () => {},
-            lockAndRead: (a, b) => b(null, ''),
-            unlockFile: (a, b) => b(),
-            addUserToHTPasswd: () => {}
-          };
-        });
-        jest.doMock('fs', () => {
-          return {
-            writeFile: jest.fn((name, data, callback) => {
-              callback(new Error('write error'));
-            })
-          };
-        });
-
-        const HTPasswd = require('../src/htpasswd.ts').default;
-        const wrapper = new HTPasswd(config, stuff);
-        wrapper.adduser('addUserToHTPasswd', 'test', (err, foo) => {
-          expect(err).not.toBeNull();
-          expect(err.message).toMatch('write error');
-          done();
-        });
-      });
+      const callbackDuplicate = (a, b) => {
+        expect(a.message).toContain('already exists');
+        expect(b).toBeTruthy();
+        done();
+      };
+      wrapper.adduser('testuser', 'username already exists', callbackDuplicate);
     });
 
-    describe('reload()', () => {
-      test('it should read the file and set the users', done => {
-        const output = { test: '$6FrCaT/v0dwE', username: '$66to3JK5RgZM' };
-        const callback = () => {
-          expect(wrapper.users).toEqual(output);
-          done();
-        };
-        wrapper.reload(callback);
-      });
-
-      test('reload should fails on check file', done => {
-        jest.doMock('fs', () => {
-          return {
-            stat: (name, callback) => {
-              callback(new Error('stat error'), null);
-            }
-          };
-        });
-        const callback = err => {
-          expect(err).not.toBeNull();
-          expect(err.message).toMatch('stat error');
-          done();
-        };
-
-        const HTPasswd = require('../src/htpasswd.ts').default;
-        const wrapper = new HTPasswd(config, stuff);
-        wrapper.reload(callback);
-      });
-
-      test('reload times match', done => {
-        jest.doMock('fs', () => {
-          return {
-            stat: (name, callback) => {
-              callback(null, {
-                mtime: null
-              });
-            }
-          };
-        });
-        const callback = err => {
-          expect(err).toBeUndefined();
-          done();
-        };
-
-        const HTPasswd = require('../src/htpasswd.ts').default;
-        const wrapper = new HTPasswd(config, stuff);
-        wrapper.reload(callback);
-      });
-
-      test('reload should fails on read file', done => {
-        jest.doMock('fs', () => {
-          return {
-            stat: require.requireActual('fs').stat,
-            readFile: (name, format, callback) => {
-              callback(new Error('read error'), null);
-            }
-          };
-        });
-        const callback = err => {
-          expect(err).not.toBeNull();
-          expect(err.message).toMatch('read error');
-          done();
-        };
-
-        const HTPasswd = require('../src/htpasswd.ts').default;
-        const wrapper = new HTPasswd(config, stuff);
-        wrapper.reload(callback);
-      });
+    test('add new user with valid data', done => {
+      const callback = (a, b) => {
+        expect(a).toContain('Inserted new user in MongoDB');
+        expect(b).toBeTruthy();
+        done();
+      };
+      const randomUsername = `deleteme_${(Math.random() + 1).toString(36).substring(2)}`;
+      const randomPassword = `deleteme_${(Math.random() + 1).toString(36).substring(2)}`;
+      wrapper.adduser(randomUsername, randomPassword, callback);
     });
   });
 
-  test('changePassword - it should throw an error for user not found', done => {
-    const callback = (error, isSuccess) => {
-      expect(error).not.toBeNull();
-      expect(error.message).toBe('User not found');
-      expect(isSuccess).toBeFalsy();
-      done();
-    };
-    wrapper.changePassword(
-      'usernotpresent',
-      'oldPassword',
-      'newPassword',
-      callback
-    );
-  });
-
-  test('changePassword - it should throw an error for wrong password', done => {
-    const callback = (error, isSuccess) => {
-      expect(error).not.toBeNull();
-      expect(error.message).toBe('Invalid old Password');
-      expect(isSuccess).toBeFalsy();
-      done();
-    };
-    wrapper.changePassword(
-      'username',
-      'wrongPassword',
-      'newPassword',
-      callback
-    );
-  });
-
-  test('changePassword - it should change password', done => {
-    let dataToWrite;
-    // @ts-ignore
-    fs.writeFile = jest.fn((name, data, callback) => {
-      dataToWrite = data;
-      callback();
-    });
-    const callback = (error, isSuccess) => {
-      expect(error).toBeNull();
-      expect(isSuccess).toBeTruthy();
-      expect(fs.writeFile).toHaveBeenCalled();
-      expect(dataToWrite.indexOf('username')).not.toEqual(-1);
-      done();
-    };
-    wrapper.changePassword('username', 'password', 'newPassword', callback);
-  });
+  // describe('allow_access()', () => {
+  //   // TODO: mock PackageAccess
+  //   test('allow if user has direct access', done => {
+  //     const callback = (msg, isSuccess) => {
+  //       expect(msg.message).toContain('not allowed');
+  //       expect(isSuccess).toBeFalsy();
+  //       done();
+  //     };
+  //     wrapper.allow_access('username', package, callback);
+  //   });
+  //   test('deny if user has no direct access', done => {
+  //   });
+  //   test('allow if user has group access', done => {
+  //   });
+  //   test('deny if user has no group access', done => {
+  //   });
+  // });
+  // describe('allow_publish()', () => {
+  // });
+  // describe('allow_unpublish()', () => {
+  // });
 });
