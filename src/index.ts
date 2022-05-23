@@ -163,7 +163,10 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
    */
   public changePassword(username: string, password: string, newPassword: string, cb: Callback): Promise<void> {
     this.logger.warn(`mongodb: changePassword called for user: ${username}`);
-    return cb(getInternalError('You are not allowed to change the password via verdaccio!'), false);
+    return cb(
+      getInternalError('You are not allowed to change the password via the CLI! Please use the web interface!'),
+      false
+    );
   }
 
   /**
@@ -197,8 +200,8 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
         if (firstUser) {
           await client.close();
           await mongoConnector.disposeConnection();
-          // return cb(null, true);
-          return cb(getForbidden(`Bad username, user '${username}' already exists!`), true);
+          return cb(null, true); // Signalling OK even if user already exists
+          // return cb(getForbidden(`Bad username, user '${username}' already exists!`), true);
         }
       }
 
@@ -210,8 +213,8 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
     } catch (e) {
       const error = e.toString();
       if (error.includes('duplicate key error')) {
-        // cb(null, true);
-        cb(getForbidden(`Bad username, user '${username}' already exists!`), true);
+        cb(null, true); // Signalling OK even if user already exists
+        // cb(getForbidden(`Bad username, user '${username}' already exists!`), true);
       } else {
         cb(getInternalError('Error with adding user to MongoDB: ' + typeof e), false);
       }

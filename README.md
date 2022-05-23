@@ -29,7 +29,7 @@ Change the `auth` section in your `config.yaml` file to include the following. R
 ```yaml
 auth:
   mongodb:
-    uri: "mongodb://[username:password@]host1[:port1]/db"
+    uri: "mongodb+srv://[username]:[password]@[host1][:port1]/[db]"
     db: "verdaccio"
     collection: "users"
     encryption: "bcrypt"
