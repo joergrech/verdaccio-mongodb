@@ -15,7 +15,7 @@ import { CustomConfig } from '../types/index';
 import mongoConnector from '../util/mongoConnector.js';
 
 import { intersect } from './helpers';
-import { verifyPassword } from './password';
+import { bcryptPassword, verifyPassword } from './password';
 
 const cacheOptions = {
   max: 1000,
@@ -71,6 +71,12 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
         'mongodb: Optional field usergroups was not specified in the config file! Using default "usergroups"'
       );
       this.config.fields.usergroups = 'usergroups';
+    }
+    if (config.allowAddUser === undefined || (config.allowAddUser !== true && config.allowAddUser !== false)) {
+      this.logger.info(
+        'mongodb: Optional field allowAddUser was not specified in the config file! Using default "false"'
+      );
+      this.config.allowAddUser = false;
     }
     if (config.userIsUnique === undefined || (config.userIsUnique !== true && config.userIsUnique !== false)) {
       this.logger.info(
@@ -134,6 +140,8 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
         if (firstUser[this.config?.fields?.usergroups] && firstUser[this.config?.fields?.usergroups] !== undefined) {
           groups = firstUser[this.config?.fields?.usergroups];
         }
+        groups.push(firstUser[this.config?.fields?.username]);
+        groups = groups.filter((v, i, a) => a.indexOf(v) === i); // unique values if user was already included
 
         // Add user to cache
         this.cache.set(username, {
@@ -163,10 +171,7 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
    */
   public changePassword(username: string, password: string, newPassword: string, cb: Callback): Promise<void> {
     this.logger.warn(`mongodb: changePassword called for user: ${username}`);
-    return cb(
-      getInternalError('You are not allowed to change the password via the CLI! Please use the web interface!'),
-      false
-    );
+    return cb(getInternalError('You are not allowed to change the password via the CLI!'), false);
   }
 
   /**
@@ -193,7 +198,7 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
       const lookupQuery = `{ "${this.config?.fields?.username}": "${username}" }`;
       const lookupOptions = `{ "projection": { "_id": 0, "${this.config?.fields?.username}": 1, "${this.config?.fields?.usergroups}": 1 } }`;
 
-      if (!this.config?.userIsUnique || this.config?.userIsUnique == undefined) {
+      if (!this.config?.userIsUnique || this.config?.userIsUnique === undefined) {
         // Check if user already exist - not necessary with uniqueIndex
         const foundUsers = await users.find(JSON.parse(lookupQuery), JSON.parse(lookupOptions));
         const firstUser = await foundUsers.next();
@@ -205,11 +210,19 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
         }
       }
 
-      // Trying to insert user - will throw exception if duplicate username already exists
-      const insertQuery = `{ "${this.config?.fields?.username}": "${username}", "${this.config?.fields?.password}": "${password}", "usergroups": ["user"] }`;
-      const newUser = await users.insertOne(JSON.parse(insertQuery));
-      this.logger.info(`mongodb: Added new user: ${JSON.stringify(newUser)}`);
-      cb(null, true);
+      if (this.config.allowAddUser) {
+        // Trying to insert user - will throw exception if duplicate username already exists
+        const insertQuery = `{ "${this.config?.fields?.username}": "${username}", "${
+          this.config?.fields?.password
+        }": "${bcryptPassword(password)}", "usergroups": ["${username}","user"] }`;
+        const newUser = await users.insertOne(JSON.parse(insertQuery));
+        this.logger.info(`mongodb: Added new user: ${JSON.stringify(newUser)}`);
+        cb(null, true);
+      } else {
+        this.logger.warn(`mongodb: Adding new user was disabled! You are not allowed to add users via the CLI!`);
+        cb(null, true); // Signalling OK even if user was NOT added (or login is not possible anymore)
+        // cb(getInternalError('You are not allowed to add users via the CLI!'), false);
+      }
     } catch (e) {
       const error = e.toString();
       if (error.includes('duplicate key error')) {
@@ -233,11 +246,14 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
    */
   public allow_access(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
     const groupsIntersection = intersect(user.groups, pkg?.access || []);
+    this.logger.info(`allow_access: User ${user.groups} vs. Package ${JSON.stringify(pkg)}`);
     if (pkg?.access?.includes[user.name || ''] || groupsIntersection.length > 0) {
-      this.logger.debug(`mongodb: ${user.name} has been granted access to package '${(pkg as any).name}'`);
+      this.logger.info(`mongodb: ${user.name} has been granted access to package '${(pkg as any).name}'`);
       cb(null, true);
     } else {
-      this.logger.error(`mongodb: ${user.name} is not allowed to access the package '${(pkg as any).name}'`);
+      this.logger.error(
+        `mongodb: ${user.name || 'anonymous user'} is not allowed to access the package '${(pkg as any).name}'`
+      );
       cb(getForbidden('error, try again'), false);
     }
   }
@@ -251,8 +267,9 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
    */
   public allow_publish(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
     const groupsIntersection = intersect(user.groups, pkg?.publish || []);
+    this.logger.info(`allow_publish: User ${user.groups} vs. Package ${JSON.stringify(pkg)}`);
     if (pkg?.publish?.includes[user.name || ''] || groupsIntersection.length > 0) {
-      this.logger.debug(
+      this.logger.info(
         `mongodb: ${user.name} has been granted the right to publish the package '${(pkg as any).name}'`
       );
       cb(null, true);
@@ -271,8 +288,9 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
    */
   public allow_unpublish(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
     const groupsIntersection = intersect(user.groups, pkg?.publish || []);
+    this.logger.info(`allow_unpublish: User ${user.groups} vs. Package ${JSON.stringify(pkg)}`);
     if (pkg?.publish?.includes[user.name || ''] || groupsIntersection.length > 0) {
-      this.logger.debug(
+      this.logger.info(
         `mongodb: ${user.name} has been granted the right to unpublish the package '${(pkg as any).name}'`
       );
       cb(null, true);

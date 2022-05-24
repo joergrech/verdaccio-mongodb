@@ -1,6 +1,6 @@
 {
   "name": "verdaccio-mongodb",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "MongoDB Authentication plugin for Verdaccio",
   "author": "Jörg Rech <joerg.rech@gmail.com>",
   "license": "MIT",
@@ -47,6 +47,7 @@
     "build:js": "babel src/ --out-dir lib --extensions \".ts,.tsx\"",
     "build:types": "tsc --emitDeclarationOnly",
     "test": "jest",
-    "lint": "eslint \"**/*.{js,ts}\""
-  }
+    "lint": "eslint \"**/*.{js,ts}\"",
+    "buildall": "npm run lint && npm run test && npm run build:types && npm run build:js"
+    }
 }
