@@ -55,23 +55,34 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
       this.config.fields = {};
     }
     if (!config.fields?.username) {
-      this.logger.info(
-        'mongodb: Optional field username was not specified in the config file! Using default "username"'
-      );
+      this.logger.info('mongodb: Field username was not specified in the config file! Using default "username"');
       this.config.fields.username = 'username';
     }
     if (!config.fields?.password) {
-      this.logger.info(
-        'mongodb: Optional field password was not specified in the config file! Using default "password"'
-      );
+      this.logger.info('mongodb: Field password was not specified in the config file! Using default "password"');
       this.config.fields.password = 'password';
     }
     if (!config.fields?.usergroups) {
-      this.logger.info(
-        'mongodb: Optional field usergroups was not specified in the config file! Using default "usergroups"'
-      );
+      this.logger.info('mongodb: Field usergroups was not specified in the config file! Using default "usergroups"');
       this.config.fields.usergroups = 'usergroups';
     }
+
+    if (!this.config.rights) {
+      this.config.rights = {};
+    }
+    if (!config.rights?.access) {
+      this.logger.info('mongodb: Right to access was not specified in the config file! Using default "user"');
+      this.config.rights.access = 'user';
+    }
+    if (!config.rights?.publish) {
+      this.logger.info('mongodb: Right to publish was not specified in the config file! Using default "user"');
+      this.config.rights.publish = 'user';
+    }
+    if (!config.rights?.unpublish) {
+      this.logger.info('mongodb: Right to unpublish was not specified in the config file! Using default "user"');
+      this.config.rights.unpublish = 'user';
+    }
+
     if (config.allowAddUser === undefined || (config.allowAddUser !== true && config.allowAddUser !== false)) {
       this.logger.info(
         'mongodb: Optional field allowAddUser was not specified in the config file! Using default "false"'
@@ -246,15 +257,22 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
    */
   public allow_access(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
     const groupsIntersection = intersect(user.groups, pkg?.access || []);
-    this.logger.info(`allow_access: User ${user.groups} vs. Package ${JSON.stringify(pkg)}`);
-    if (pkg?.access?.includes[user.name || ''] || groupsIntersection.length > 0) {
+    let hasRights = false;
+    if (this.config.rights.access === 'maintainer') {
+      hasRights = user.groups.includes((pkg as any).name);
+    } else if (this.config.rights.access === 'contributor') {
+      hasRights = user.groups.includes((pkg as any).name);
+    } else {
+      hasRights = pkg?.access?.includes(user.name || '') || groupsIntersection.length > 0;
+    }
+    if (hasRights) {
       this.logger.info(`mongodb: ${user.name} has been granted access to package '${(pkg as any).name}'`);
       cb(null, true);
     } else {
       this.logger.error(
         `mongodb: ${user.name || 'anonymous user'} is not allowed to access the package '${(pkg as any).name}'`
       );
-      cb(getForbidden('error, try again'), false);
+      cb(getForbidden(`User ${user.name} is not allowed to access the package ${(pkg as any).name}`), false);
     }
   }
 
@@ -267,15 +285,22 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
    */
   public allow_publish(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
     const groupsIntersection = intersect(user.groups, pkg?.publish || []);
-    this.logger.info(`allow_publish: User ${user.groups} vs. Package ${JSON.stringify(pkg)}`);
-    if (pkg?.publish?.includes[user.name || ''] || groupsIntersection.length > 0) {
+    let hasRights = false;
+    if (this.config.rights.publish === 'maintainer') {
+      hasRights = user.groups.includes((pkg as any).name);
+    } else if (this.config.rights.publish === 'contributor') {
+      hasRights = user.groups.includes((pkg as any).name);
+    } else {
+      hasRights = pkg?.publish?.includes(user.name || '') || groupsIntersection.length > 0;
+    }
+    if (hasRights) {
       this.logger.info(
         `mongodb: ${user.name} has been granted the right to publish the package '${(pkg as any).name}'`
       );
       cb(null, true);
     } else {
-      this.logger.error(`mongodb: ${user.name} is not allowed to publish the package '${(pkg as any).name}'`);
-      cb(getForbidden('error, try again'), false);
+      // this.logger.error(`mongodb: ${user.name} is not allowed to publish the package '${(pkg as any).name}'`);
+      cb(getForbidden(`User ${user.name} is not allowed to publish the package ${(pkg as any).name}!`), false);
     }
   }
 
@@ -288,15 +313,22 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
    */
   public allow_unpublish(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
     const groupsIntersection = intersect(user.groups, pkg?.publish || []);
-    this.logger.info(`allow_unpublish: User ${user.groups} vs. Package ${JSON.stringify(pkg)}`);
-    if (pkg?.publish?.includes[user.name || ''] || groupsIntersection.length > 0) {
+    let hasRights = false;
+    if (this.config.rights.unpublish === 'maintainer') {
+      hasRights = user.groups.includes((pkg as any).name);
+    } else if (this.config.rights.unpublish === 'contributor') {
+      hasRights = user.groups.includes((pkg as any).name);
+    } else {
+      hasRights = pkg?.publish?.includes(user.name || '') || groupsIntersection.length > 0;
+    }
+    if (hasRights) {
       this.logger.info(
         `mongodb: ${user.name} has been granted the right to unpublish the package '${(pkg as any).name}'`
       );
       cb(null, true);
     } else {
       this.logger.error(`mongodb: ${user.name} is not allowed to unpublish the package '${(pkg as any).name}'`);
-      cb(getForbidden('error, try again'), false);
+      cb(getForbidden(`User ${user.name} is not allowed to unpublish the package ${(pkg as any).name}`), false);
     }
   }
 }

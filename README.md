@@ -40,6 +40,10 @@ auth:
       username:   "username"
       password:   "password"
       usergroups: "usergroups"
+    rights:
+      access:     "user"
+      publish:    "maintainer"
+      unpublish:  "maintainer"
 ```
 
 Configuration options
@@ -54,6 +58,10 @@ Configuration options
   * `username`: Name of the field used to store the unique username (e.g., user, username, email, etc.). Defaults to `username` [OPTIONAL]
   * `password`: Name of the field used to store the password (e.g., pass, password, token, etc.). Defaults to `password` [OPTIONAL]
   * `usergroups`: Name of the field used to store the array of usergroups (e.g., groups, usergroups, roles, etc.). Defaults to `usergroups` [OPTIONAL]
+* `rights`: (Definition of who is allowed to work with packages)
+  * `access`: Name of people allowed to access a package (currently supported: `maintainer`, `contributor`, `user`). Defaults to `user` (if authenticated or anonymous user depends on 'packages' config) [OPTIONAL]
+  * `publish`: Name of people allowed to publish a package (currently supported: `maintainer`, `contributor`, `user`). Defaults to `user` (if authenticated or anonymous user depends on 'packages' config) [OPTIONAL]
+  * `unpublish`: Name of people allowed to unpublish a package (currently supported: `maintainer`, `contributor`, `user`). Defaults to `user` (if authenticated or anonymous user depends on 'packages' config) [OPTIONAL]
 
 ## NOTES
 An alternative verdaccio auth plugin exists called `verdaccio-auth-mongo`: see https://www.npmjs.com/package/verdaccio-auth-mongo and https://gitlab.com/stack-library-open/verdaccio-auth-mongo/-/blob/master/index.js

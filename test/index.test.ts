@@ -6,17 +6,22 @@ import Logger from './__mocks__/Logger';
 describe('AuthMongoDB', () => {
   const OLD_ENV = process.env;
   const config = {
-    allowAddUser: true,
     uri: process.env.MONGODB_URI, // NOTE: use .env file in root of this project with 'mongodb+srv://<USER>:<PASS>@<HOST>/<DB>' etc.
     db: process.env.MONGODB_DB,
     collection: process.env.MONGODB_COLLECTION,
     encryption: 'bcrypt',
     userIsUnique: true,
+    allowAddUser: true,
     cacheTTL: 300000,
     fields: {
       username: 'username',
       password: 'password',
       usergroups: 'usergroups',
+    },
+    rights: {
+      access: 'user',
+      publish: 'user',
+      unpublish: 'user',
     },
   };
   const options = { config: {}, logger: new Logger() };
