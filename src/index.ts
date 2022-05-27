@@ -24,6 +24,7 @@ const cacheOptions = {
   updateAgeOnGet: false,
   updateAgeOnHas: false,
 };
+const ADMIN_GROUP = '__admin__';
 
 /**
  * Custom Verdaccio Authenticate Plugin.
@@ -287,11 +288,12 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
     const groupsIntersection = intersect(user.groups, pkg?.publish || []);
     let hasRights = false;
     if (this.config.rights.publish === 'maintainer') {
-      hasRights = user.groups.includes((pkg as any).name);
+      hasRights = user.groups.includes((pkg as any).name) || user.groups.includes(ADMIN_GROUP);
     } else if (this.config.rights.publish === 'contributor') {
-      hasRights = user.groups.includes((pkg as any).name);
+      hasRights = user.groups.includes((pkg as any).name) || user.groups.includes(ADMIN_GROUP);
     } else {
-      hasRights = pkg?.publish?.includes(user.name || '') || groupsIntersection.length > 0;
+      hasRights =
+        pkg?.publish?.includes(user.name || '') || groupsIntersection.length > 0 || user.groups.includes(ADMIN_GROUP);
     }
     if (hasRights) {
       this.logger.info(
@@ -315,11 +317,12 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
     const groupsIntersection = intersect(user.groups, pkg?.publish || []);
     let hasRights = false;
     if (this.config.rights.unpublish === 'maintainer') {
-      hasRights = user.groups.includes((pkg as any).name);
+      hasRights = user.groups.includes((pkg as any).name) || user.groups.includes(ADMIN_GROUP);
     } else if (this.config.rights.unpublish === 'contributor') {
-      hasRights = user.groups.includes((pkg as any).name);
+      hasRights = user.groups.includes((pkg as any).name) || user.groups.includes(ADMIN_GROUP);
     } else {
-      hasRights = pkg?.publish?.includes(user.name || '') || groupsIntersection.length > 0;
+      hasRights =
+        pkg?.publish?.includes(user.name || '') || groupsIntersection.length > 0 || user.groups.includes('__admin__');
     }
     if (hasRights) {
       this.logger.info(
