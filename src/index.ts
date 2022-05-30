@@ -271,9 +271,18 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
       cb(null, true);
     } else {
       this.logger.error(
-        `mongodb: ${user.name || 'anonymous user'} is not allowed to access the package '${(pkg as any).name}'`
+        `mongodb: ${user.name || 'anonymous user'} is not allowed to access the package '${
+          (pkg as any).name
+        }' - config rights set were to '${this.config.rights.access}`
       );
-      cb(getForbidden(`User ${user.name} is not allowed to access the package ${(pkg as any).name}`), false);
+      cb(
+        getForbidden(
+          `User ${user.name} is not allowed to access the package ${(pkg as any).name} - only ${
+            this.config.rights.access
+          }s are!`
+        ),
+        false
+      );
     }
   }
 
@@ -297,12 +306,25 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
     }
     if (hasRights) {
       this.logger.info(
-        `mongodb: ${user.name} has been granted the right to publish the package '${(pkg as any).name}'`
+        `mongodb: ${user.name} has been granted the right to publish the package '${
+          (pkg as any).name
+        }' - config rights set were to '${this.config.rights.publish}'`
       );
       cb(null, true);
     } else {
-      // this.logger.error(`mongodb: ${user.name} is not allowed to publish the package '${(pkg as any).name}'`);
-      cb(getForbidden(`User ${user.name} is not allowed to publish the package ${(pkg as any).name}!`), false);
+      this.logger.error(
+        `mongodb: ${user.name} is not allowed to publish the package '${
+          (pkg as any).name
+        }' - config rights set were to '${this.config.rights.publish}`
+      );
+      cb(
+        getForbidden(
+          `User ${user.name} is not allowed to publish the package ${(pkg as any).name} - only ${
+            this.config.rights.publish
+          }s are!`
+        ),
+        false
+      );
     }
   }
 
@@ -317,21 +339,33 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
     const groupsIntersection = intersect(user.groups, pkg?.publish || []);
     let hasRights = false;
     if (this.config.rights.unpublish === 'maintainer') {
-      hasRights = user.groups.includes((pkg as any).name) || user.groups.includes(ADMIN_GROUP);
+      hasRights = user.groups.includes((pkg as any).name);
     } else if (this.config.rights.unpublish === 'contributor') {
-      hasRights = user.groups.includes((pkg as any).name) || user.groups.includes(ADMIN_GROUP);
+      hasRights = user.groups.includes((pkg as any).name);
     } else {
-      hasRights =
-        pkg?.publish?.includes(user.name || '') || groupsIntersection.length > 0 || user.groups.includes('__admin__');
+      hasRights = pkg?.publish?.includes(user.name || '') || groupsIntersection.length > 0;
     }
-    if (hasRights) {
+    if (hasRights || user.groups.includes(ADMIN_GROUP)) {
       this.logger.info(
-        `mongodb: ${user.name} has been granted the right to unpublish the package '${(pkg as any).name}'`
+        `mongodb: ${user.name} has been granted the right to unpublish the package '${
+          (pkg as any).name
+        }' - config rights set were to '${this.config.rights.unpublish}`
       );
       cb(null, true);
     } else {
-      this.logger.error(`mongodb: ${user.name} is not allowed to unpublish the package '${(pkg as any).name}'`);
-      cb(getForbidden(`User ${user.name} is not allowed to unpublish the package ${(pkg as any).name}`), false);
+      this.logger.error(
+        `mongodb: ${user.name} is not allowed to unpublish the package '${
+          (pkg as any).name
+        }' - config rights set were to '${this.config.rights.unpublish}`
+      );
+      cb(
+        getForbidden(
+          `User ${user.name} is not allowed to unpublish the package ${(pkg as any).name} - only ${
+            this.config.rights.unpublish
+          }s are!`
+        ),
+        false
+      );
     }
   }
 }
