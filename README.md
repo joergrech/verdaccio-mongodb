@@ -36,6 +36,7 @@ auth:
     userIsUnique: true
     allowAddUser: true
     cacheTTL: 300000
+    adminGroup: "&admin"
     fields:
       username:   "username"
       password:   "password"
@@ -54,6 +55,7 @@ Configuration options
 * `userIsUnique`: Switch to check unique user (currently supported: `true`, `false`). Defaults to `true` [OPTIONAL]
 * `allowAddUser`: Switch to allow or disallow adding users. Defaults to `false` [OPTIONAL]
 * `cacheTTL`: Time an entry lives in the cache measured in ms. Defaults to `300000` (5 minutes) [OPTIONAL]
+* `adminGroup`: The name of the group of admins allowed to access, publish, or unpublish any package. Must be different from user or package names! Defaults to `__admin__` [OPTIONAL]
 * `fields`: (name of the fields in the mongodb collection)
   * `username`: Name of the field used to store the unique username (e.g., user, username, email, etc.). Defaults to `username` [OPTIONAL]
   * `password`: Name of the field used to store the password (e.g., pass, password, token, etc.). Defaults to `password` [OPTIONAL]

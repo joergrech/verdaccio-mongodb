@@ -11,7 +11,7 @@ import {
 import { getUnauthorized, getInternalError, getForbidden, getBadData } from '@verdaccio/commons-api';
 import LRU from 'lru-cache';
 
-import { CustomConfig } from '../types/index';
+import { AuthMongoDBConfig } from '../types/index';
 import mongoConnector from '../util/mongoConnector.js';
 
 import { intersect } from './helpers';
@@ -24,17 +24,16 @@ const cacheOptions = {
   updateAgeOnGet: false,
   updateAgeOnHas: false,
 };
-const ADMIN_GROUP = '__admin__';
 
 /**
  * Custom Verdaccio Authenticate Plugin.
  */
-export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
+export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
   public logger: Logger;
-  private config: CustomConfig;
+  private config: AuthMongoDBConfig;
   public cache: LRU<string, any>;
 
-  public constructor(config: CustomConfig, options: PluginOptions<CustomConfig>) {
+  public constructor(config: AuthMongoDBConfig, options: PluginOptions<AuthMongoDBConfig>) {
     this.logger = options.logger;
     this.config = config;
 
@@ -97,6 +96,10 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
       this.config.userIsUnique = true;
     }
 
+    if (!config?.adminGroup) {
+      this.logger.info('mongodb: Field adminGroup was not specified in the config file! Using default "__admin__"');
+      this.config.adminGroup = '__admin__';
+    }
     if (!config.cacheTTL) {
       this.logger.info(
         'mongodb: Optional field cacheTTL was not specified in the config file! Using default "5 minutes"'
@@ -259,26 +262,26 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
   public allow_access(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
     const groupsIntersection = intersect(user.groups, pkg?.access || []);
     let hasRights = false;
-    if (this.config.rights.access === 'maintainer') {
+    if (this.config.rights?.access === 'maintainer') {
       hasRights = user.groups.includes((pkg as any).name);
-    } else if (this.config.rights.access === 'contributor') {
+    } else if (this.config.rights?.access === 'contributor') {
       hasRights = user.groups.includes((pkg as any).name);
     } else {
       hasRights = pkg?.access?.includes(user.name || '') || groupsIntersection.length > 0;
     }
-    if (hasRights) {
+    if (hasRights || user.groups.includes(this.config.adminGroup)) {
       this.logger.info(`mongodb: ${user.name} has been granted access to package '${(pkg as any).name}'`);
       cb(null, true);
     } else {
       this.logger.error(
         `mongodb: ${user.name || 'anonymous user'} is not allowed to access the package '${
           (pkg as any).name
-        }' - config rights set were to '${this.config.rights.access}`
+        }' - config rights set were to '${this.config.rights?.access}`
       );
       cb(
         getForbidden(
           `User ${user.name} is not allowed to access the package ${(pkg as any).name} - only ${
-            this.config.rights.access
+            this.config.rights?.access
           }s are!`
         ),
         false
@@ -296,31 +299,30 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
   public allow_publish(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
     const groupsIntersection = intersect(user.groups, pkg?.publish || []);
     let hasRights = false;
-    if (this.config.rights.publish === 'maintainer') {
-      hasRights = user.groups.includes((pkg as any).name) || user.groups.includes(ADMIN_GROUP);
-    } else if (this.config.rights.publish === 'contributor') {
-      hasRights = user.groups.includes((pkg as any).name) || user.groups.includes(ADMIN_GROUP);
+    if (this.config.rights?.publish === 'maintainer') {
+      hasRights = user.groups.includes((pkg as any).name);
+    } else if (this.config.rights?.publish === 'contributor') {
+      hasRights = user.groups.includes((pkg as any).name);
     } else {
-      hasRights =
-        pkg?.publish?.includes(user.name || '') || groupsIntersection.length > 0 || user.groups.includes(ADMIN_GROUP);
+      hasRights = pkg?.publish?.includes(user.name || '') || groupsIntersection.length > 0;
     }
-    if (hasRights) {
+    if (hasRights || user.groups.includes(this.config.adminGroup)) {
       this.logger.info(
         `mongodb: ${user.name} has been granted the right to publish the package '${
           (pkg as any).name
-        }' - config rights set were to '${this.config.rights.publish}'`
+        }' - config rights set were to '${this.config.rights?.publish}'`
       );
       cb(null, true);
     } else {
       this.logger.error(
         `mongodb: ${user.name} is not allowed to publish the package '${
           (pkg as any).name
-        }' - config rights set were to '${this.config.rights.publish}`
+        }' - config rights set were to '${this.config.rights?.publish}`
       );
       cb(
         getForbidden(
           `User ${user.name} is not allowed to publish the package ${(pkg as any).name} - only ${
-            this.config.rights.publish
+            this.config.rights?.publish
           }s are!`
         ),
         false
@@ -338,30 +340,30 @@ export default class AuthMongoDB implements IPluginAuth<CustomConfig> {
   public allow_unpublish(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
     const groupsIntersection = intersect(user.groups, pkg?.publish || []);
     let hasRights = false;
-    if (this.config.rights.unpublish === 'maintainer') {
+    if (this.config.rights?.unpublish === 'maintainer') {
       hasRights = user.groups.includes((pkg as any).name);
-    } else if (this.config.rights.unpublish === 'contributor') {
+    } else if (this.config.rights?.unpublish === 'contributor') {
       hasRights = user.groups.includes((pkg as any).name);
     } else {
       hasRights = pkg?.publish?.includes(user.name || '') || groupsIntersection.length > 0;
     }
-    if (hasRights || user.groups.includes(ADMIN_GROUP)) {
+    if (hasRights || user.groups.includes(this.config.adminGroup)) {
       this.logger.info(
         `mongodb: ${user.name} has been granted the right to unpublish the package '${
           (pkg as any).name
-        }' - config rights set were to '${this.config.rights.unpublish}`
+        }' - config rights set were to '${this.config.rights?.unpublish}`
       );
       cb(null, true);
     } else {
       this.logger.error(
         `mongodb: ${user.name} is not allowed to unpublish the package '${
           (pkg as any).name
-        }' - config rights set were to '${this.config.rights.unpublish}`
+        }' - config rights set were to '${this.config.rights?.unpublish}`
       );
       cb(
         getForbidden(
           `User ${user.name} is not allowed to unpublish the package ${(pkg as any).name} - only ${
-            this.config.rights.unpublish
+            this.config.rights?.unpublish
           }s are!`
         ),
         false
