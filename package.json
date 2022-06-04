@@ -1,6 +1,6 @@
 {
   "name": "verdaccio-mongodb",
-  "version": "1.1.0",
+  "version": "1.1.2",
   "description": "MongoDB Authentication plugin for Verdaccio",
   "author": "Jörg Rech <joerg.rech@gmail.com>",
   "license": "MIT",
