@@ -8,10 +8,14 @@ describe('AuthMongoDB', () => {
   const config = {
     uri: process.env.MONGODB_URI, // NOTE: use .env file in root of this project with 'mongodb+srv://<USER>:<PASS>@<HOST>/<DB>' etc.
     db: process.env.MONGODB_DB,
-    collection: process.env.MONGODB_COLLECTION,
+    collections: {
+      users: process.env.MONGODB_COLLECTION_USERS,
+      packages: process.env.MONGODB_COLLECTION_PACKAGES,
+    },
     encryption: 'bcrypt',
     userIsUnique: true,
     allowAddUser: true,
+    countActivity: false,
     cacheTTL: 300000,
     fields: {
       username: 'username',
@@ -43,7 +47,7 @@ describe('AuthMongoDB', () => {
     test('throw Error if required configs are missing', () => {
       expect(function() {
         new AuthMongoDB({}, { config: {}, logger: new Logger() });
-      }).toThrow(/must specify "uri", "db", and "collection" in config/);
+      }).toThrow(/must specify "uri", "db", and "collections.users" in config/);
     });
   });
 
@@ -143,7 +147,7 @@ describe('AuthMongoDB', () => {
       const client = await mongoConnector.connectToDatabase(config?.uri);
       const db = await mongoConnector.getDb(config?.db);
       await client.connect();
-      const users = await db.collection(config?.collection);
+      const users = await db.collection(config?.collections.users);
       const query = `{ "${config?.fields?.username}": { "$regex": "deleteme_.*" } }`;
       await users.deleteMany(JSON.parse(query));
     });

@@ -4,9 +4,12 @@ auth:
   mongodb:
     uri: "mongodb+srv://<USER>:<PASS>@<HOST>/<DB>"
     db: "<DB>"
-    collection: "users"
+    collections:
+      users: "users"
+      packages: "packages"
     encryption: "bcrypt"
     userIsUnique: true
+    countActivity: false
     fields:
       username:   "username"
       password:   "password"

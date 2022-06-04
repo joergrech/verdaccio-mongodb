@@ -47,61 +47,77 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
       this.logger.error('mongodb: Required DB was not specified in the config file!');
       requiredConfigMissing = true;
     }
-    if (!config.collection) {
-      this.logger.error('mongodb: Required Collection was not specified in the config file!');
+    if (!this.config.collections) {
+      this.config.collections = {};
+    }
+    if (!config.collections.users) {
+      this.logger.error('mongodb: Required "users" Collection was not specified in the config file!');
       requiredConfigMissing = true;
+    }
+    if (!config.collections.packages) {
+      this.logger.debug('mongodb: The "packages" Collection was not specified in the config file!');
     }
     if (!this.config.fields) {
       this.config.fields = {};
     }
     if (!config.fields?.username) {
-      this.logger.info('mongodb: Field username was not specified in the config file! Using default "username"');
+      this.logger.warn('mongodb: Field username was not specified in the config file! Using default "username"');
       this.config.fields.username = 'username';
     }
     if (!config.fields?.password) {
-      this.logger.info('mongodb: Field password was not specified in the config file! Using default "password"');
+      this.logger.warn('mongodb: Field password was not specified in the config file! Using default "password"');
       this.config.fields.password = 'password';
     }
     if (!config.fields?.usergroups) {
-      this.logger.info('mongodb: Field usergroups was not specified in the config file! Using default "usergroups"');
+      this.logger.warn('mongodb: Field usergroups was not specified in the config file! Using default "usergroups"');
       this.config.fields.usergroups = 'usergroups';
+    }
+    if (!config.fields?.packagename) {
+      this.logger.warn('mongodb: Field packagename was not specified in the config file! Using default "packagename"');
+      this.config.fields.packagename = 'packagename';
     }
 
     if (!this.config.rights) {
       this.config.rights = {};
     }
     if (!config.rights?.access) {
-      this.logger.info('mongodb: Right to access was not specified in the config file! Using default "user"');
+      this.logger.warn('mongodb: Right to access was not specified in the config file! Using default "user"');
       this.config.rights.access = 'user';
     }
     if (!config.rights?.publish) {
-      this.logger.info('mongodb: Right to publish was not specified in the config file! Using default "user"');
+      this.logger.warn('mongodb: Right to publish was not specified in the config file! Using default "user"');
       this.config.rights.publish = 'user';
     }
     if (!config.rights?.unpublish) {
-      this.logger.info('mongodb: Right to unpublish was not specified in the config file! Using default "user"');
+      this.logger.warn('mongodb: Right to unpublish was not specified in the config file! Using default "user"');
       this.config.rights.unpublish = 'user';
     }
 
     if (config.allowAddUser === undefined || (config.allowAddUser !== true && config.allowAddUser !== false)) {
-      this.logger.info(
+      this.logger.warn(
         'mongodb: Optional field allowAddUser was not specified in the config file! Using default "false"'
       );
       this.config.allowAddUser = false;
     }
     if (config.userIsUnique === undefined || (config.userIsUnique !== true && config.userIsUnique !== false)) {
-      this.logger.info(
+      this.logger.warn(
         'mongodb: Optional field userIsUnique was not specified in the config file! Using default "true"'
       );
       this.config.userIsUnique = true;
     }
 
+    if (!config.countActivity) {
+      this.logger.warn(
+        'mongodb: Optional field countActivity was not specified in the config file! Using default "false".'
+      );
+      this.config.countActivity = false;
+    }
     if (!config?.adminGroup) {
-      this.logger.info('mongodb: Field adminGroup was not specified in the config file! Using default "__admin__"');
+      this.logger.warn('mongodb: Field adminGroup was not specified in the config file! Using default "__admin__"');
       this.config.adminGroup = '__admin__';
     }
     if (!config.cacheTTL) {
-      this.logger.info(
+      this.logger.debug(
         'mongodb: Optional field cacheTTL was not specified in the config file! Using default "5 minutes"'
       );
       this.config.cacheTTL = 5 * 60 * 1000;
@@ -110,9 +126,11 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
     this.cache = new LRU(cacheOptions);
 
     if (requiredConfigMissing) {
-      throw new Error('must specify "uri", "db", and "collection" in config');
+      throw new Error('must specify "uri", "db", and "collections.users" in config');
     }
 
+    mongoConnector.setConfig(this.config);
+    mongoConnector.setLogger(this.logger);
     return this;
   }
 
@@ -137,7 +155,7 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
 
     try {
       await client.connect();
-      const users = await db.collection(this.config?.collection);
+      const users = await db.collection(this.config?.collections.users);
       const authQuery = `{ "${this.config?.fields?.username}": "${username}" }`;
       const authOptions = `{ "projection": { "_id": 0, "${this.config?.fields?.username}": 1, "${this.config?.fields?.password}": 1, "${this.config?.fields?.usergroups}": 1 } }`;
 
@@ -209,7 +227,7 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
 
     try {
       await client.connect();
-      const users = await db.collection(this.config?.collection);
+      const users = await db.collection(this.config?.collections.users);
       const lookupQuery = `{ "${this.config?.fields?.username}": "${username}" }`;
       const lookupOptions = `{ "projection": { "_id": 0, "${this.config?.fields?.username}": 1, "${this.config?.fields?.usergroups}": 1 } }`;
 
@@ -259,7 +277,7 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
    * @param pkg
    * @param cb
    */
-  public allow_access(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
+  public async allow_access(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): Promise<void> {
     const groupsIntersection = intersect(user.groups, pkg?.access || []);
     let hasRights = false;
     if (this.config.rights?.access === 'maintainer') {
@@ -270,6 +288,7 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
       hasRights = pkg?.access?.includes(user.name || '') || groupsIntersection.length > 0;
     }
     if (hasRights || user.groups.includes(this.config.adminGroup)) {
+      await mongoConnector.incCounter('access', user.name, (pkg as any).name, this.config);
       this.logger.info(`mongodb: ${user.name} has been granted access to package '${(pkg as any).name}'`);
       cb(null, true);
     } else {
@@ -296,7 +315,7 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
    * @param pkg
    * @param cb
    */
-  public allow_publish(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
+  public async allow_publish(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): Promise<void> {
     const groupsIntersection = intersect(user.groups, pkg?.publish || []);
     let hasRights = false;
     if (this.config.rights?.publish === 'maintainer') {
@@ -307,6 +326,7 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
       hasRights = pkg?.publish?.includes(user.name || '') || groupsIntersection.length > 0;
     }
     if (hasRights || user.groups.includes(this.config.adminGroup)) {
+      await mongoConnector.incCounter('publish', user.name, (pkg as any).name, this.config);
       this.logger.info(
         `mongodb: ${user.name} has been granted the right to publish the package '${
           (pkg as any).name
@@ -337,7 +357,7 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
    * @param pkg
    * @param cb
    */
-  public allow_unpublish(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): void {
+  public async allow_unpublish(user: RemoteUser, pkg: PackageAccess, cb: AuthAccessCallback): Promise<void> {
     const groupsIntersection = intersect(user.groups, pkg?.publish || []);
     let hasRights = false;
     if (this.config.rights?.unpublish === 'maintainer') {
@@ -348,6 +368,7 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
       hasRights = pkg?.publish?.includes(user.name || '') || groupsIntersection.length > 0;
     }
     if (hasRights || user.groups.includes(this.config.adminGroup)) {
+      await mongoConnector.incCounter('unpublish', user.name, (pkg as any).name, this.config);
       this.logger.info(
         `mongodb: ${user.name} has been granted the right to unpublish the package '${
           (pkg as any).name

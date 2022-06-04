@@ -3,16 +3,21 @@ import { Config } from '@verdaccio/types';
 export interface AuthMongoDBConfig extends Config {
   uri: string;
   db: string;
-  collection: string;
+  collection: {
+    users: string;
+    packages?: string;
+  };
   encryption?: string;
   userIsUnique?: boolean;
   allowAddUser?: boolean;
+  countActivity?: boolean;
   cacheTTL: number;
   adminGroup: string;
   fields?: {
     username?: string;
     password?: string;
     usergroups?: string;
+    packagename?: string;
   };
   rights?: {
     access?: string;

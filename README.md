@@ -31,16 +31,20 @@ auth:
   mongodb:
     uri: "mongodb+srv://[username]:[password]@[host1][:port1]/[db]"
     db: "verdaccio"
-    collection: "users"
+    collections:
+      users: "users"
+      packages: "packages"
     encryption: "bcrypt"
     userIsUnique: true
     allowAddUser: true
+    countActivity: true
     cacheTTL: 300000
     adminGroup: "&admin"
     fields:
       username:   "username"
       password:   "password"
       usergroups: "usergroups"
+      packagename: "packagename"
     rights:
       access:     "user"
       publish:    "maintainer"
@@ -50,10 +54,14 @@ auth:
 Configuration options
 * `uri`: The MongoDB-like URI including admin username, password and database holding the user collection. [REQUIRED]
 * `database`: The database in the MongoDB holding the user collection [REQUIRED]
-* `username`: The clear-text name of the admin user who has the necessary roles or rights to insert, update, delete(?), and lookup users in a specific collection (i.e., [user-collection]). [REQUIRED]
+* `collections`: (name of the collections in the mongodb database)
+  * `users`: Name of the user collection used to store the unique user with passwords and additional information (e.g., username, email, access, etc.). Defaults to `users` [REQUIRED]
+  * `packages`: Name of the packages collection used to store information on the packages (e.g., name, access, versions, etc.). Defaults to `packages` [OPTIONAL]
+* The clear-text name of the admin user who has the necessary roles or rights to insert, update, delete(?), and lookup users in a specific collection (i.e., [user-collection]). [REQUIRED]
 * `encryption`: The mechanism to encrypt the password (currently supported: `none`, `bcrypt`). Defaults to `bcrypt` [OPTIONAL]
 * `userIsUnique`: Switch to check unique user (currently supported: `true`, `false`). Defaults to `true` [OPTIONAL]
 * `allowAddUser`: Switch to allow or disallow adding users. Defaults to `false` [OPTIONAL]
+* `countActivity`: Switch to enable or disable counting access, publish, or unpublish events. Defaults to `false` [OPTIONAL]
 * `cacheTTL`: Time an entry lives in the cache measured in ms. Defaults to `300000` (5 minutes) [OPTIONAL]
 * `adminGroup`: The name of the group of admins allowed to access, publish, or unpublish any package. Must be different from user or package names! Defaults to `__admin__` [OPTIONAL]
 * `fields`: (name of the fields in the mongodb collection)
