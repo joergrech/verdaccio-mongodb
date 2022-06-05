@@ -1,5 +1,5 @@
 import AuthMongoDB from '../src/index';
-import mongoConnector from '../util/mongoConnector.js';
+import mongoConnector from '../src/mongoConnector.js';
 
 import Logger from './__mocks__/Logger';
 

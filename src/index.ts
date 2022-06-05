@@ -12,8 +12,8 @@ import { getUnauthorized, getInternalError, getForbidden, getBadData } from '@ve
 import LRU from 'lru-cache';
 
 import { AuthMongoDBConfig } from '../types/index';
-import mongoConnector from '../util/mongoConnector.js';
 
+import mongoConnector from './mongoConnector.js';
 import { intersect } from './helpers';
 import { bcryptPassword, verifyPassword } from './password';
 

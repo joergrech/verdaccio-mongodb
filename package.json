@@ -1,6 +1,6 @@
 {
   "name": "verdaccio-mongodb",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "MongoDB Authentication plugin for Verdaccio",
   "author": "Jörg Rech <joerg.rech@gmail.com>",
   "license": "MIT",
@@ -16,8 +16,11 @@
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "files": [
-    "lib/**/*"
+    "lib/"
   ],
+  "engines": {
+    "node": ">=10"
+  },
   "dependencies": {
     "@verdaccio/commons-api": "^10.2.0",
     "bcryptjs": "^2.4.3",
@@ -43,7 +46,7 @@
   "scripts": {
     "release": "standard-version -a -s",
     "build": "npm run build:types && npm run build:js",
-    "build:js": "babel src/ --out-dir lib --extensions \".ts,.tsx\"",
+    "build:js": "babel src/ --out-dir lib --extensions \".js,.ts,.tsx\"",
     "build:types": "tsc --emitDeclarationOnly",
     "test": "jest",
     "lint": "eslint \"**/*.{js,ts}\"",
