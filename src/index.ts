@@ -262,7 +262,7 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
         // cb(getInternalError('You are not allowed to add users via the CLI!'), false);
       }
     } catch (e) {
-      const error = e.toString();
+      const error: string = (e as Error).message;
       if (error.includes('duplicate key error')) {
         cb(null, true); // Signalling OK even if user already exists
         // cb(getForbidden(`Bad username, user '${username}' already exists!`), true);
