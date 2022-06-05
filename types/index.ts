@@ -8,7 +8,6 @@ export interface AuthMongoDBConfig extends Config {
     packages?: string;
   };
   encryption?: string;
-  userIsUnique?: boolean;
   allowAddUser?: boolean;
   countActivity?: boolean;
   cacheTTL: number;

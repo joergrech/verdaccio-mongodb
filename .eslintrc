@@ -3,6 +3,6 @@
   "plugins": ["prettier"],
   "rules": {
     "@typescript-eslint/ban-ts-ignore": "off",
-    "prettier/prettier": "warn"
+    "prettier/prettier": "off"
   }
 }

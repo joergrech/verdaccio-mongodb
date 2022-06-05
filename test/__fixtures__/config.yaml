@@ -8,7 +8,6 @@ auth:
       users: "users"
       packages: "packages"
     encryption: "bcrypt"
-    userIsUnique: true
     countActivity: false
     fields:
       username:   "username"

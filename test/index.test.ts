@@ -13,7 +13,6 @@ describe('AuthMongoDB', () => {
       packages: process.env.MONGODB_COLLECTION_PACKAGES,
     },
     encryption: 'bcrypt',
-    userIsUnique: true,
     allowAddUser: true,
     countActivity: false,
     cacheTTL: 300000,
@@ -110,7 +109,6 @@ describe('AuthMongoDB', () => {
     });
 
     test('do not add duplicate users', done => {
-      // TODO: check if username is inserted a second time with config.userIsUnique == false
       const callbackDuplicate = (error, groups): void => {
         expect(error).toBeNull();
         // expect(error.message).toContain('already exists'); Does not work - even with getCode(200, "Message")
@@ -120,20 +118,18 @@ describe('AuthMongoDB', () => {
       wrapper.adduser('testuser', 'username already exists', callbackDuplicate);
     });
 
-    test('do not add duplicate users when userIsUnique == false', done => {
-      const newConfig = config;
-      newConfig.userIsUnique = false;
-      wrapper = new AuthMongoDB(newConfig, options);
-
+    test('do not add duplicate users if allowAddUser == false', done => {
       const callbackDuplicate = (error, groups): void => {
         expect(error).toBeNull();
-        // expect(error.message).toContain('already exists'); Does not work - even with getCode(200, "Message")
         expect(groups).toBeTruthy();
         done();
       };
-      wrapper.adduser('testuser', 'username already exists', callbackDuplicate);
+      const newConfig = JSON.parse(JSON.stringify(config));
+      newConfig.allowAddUser = false;
+      const wrapper2 = new AuthMongoDB(newConfig, options);
+      wrapper2.adduser('testuser9182', 'username can not exists', callbackDuplicate);
     });
-
+  
     test('add new user with valid data', async () => {
       const callback = (error, groups): void => {
         expect(error).toBeNull();

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import {
   PluginOptions,
   AuthAccessCallback,
@@ -10,6 +11,10 @@ import {
 } from '@verdaccio/types';
 import { getUnauthorized, getInternalError, getForbidden, getBadData } from '@verdaccio/commons-api';
 import LRU from 'lru-cache';
+type CachedUser = {
+  password: string;
+  groups: Array<string>;
+}
 
 import { AuthMongoDBConfig } from '../types/index';
 
@@ -31,7 +36,7 @@ const cacheOptions = {
 export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
   public logger: Logger;
   private config: AuthMongoDBConfig;
-  public cache: LRU<string, any>;
+  public cache: LRU<string, unknown>;
 
   public constructor(config: AuthMongoDBConfig, options: PluginOptions<AuthMongoDBConfig>) {
     this.logger = options.logger;
@@ -104,12 +109,6 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
       );
       this.config.allowAddUser = false;
     }
-    if (config.userIsUnique === undefined || (config.userIsUnique !== true && config.userIsUnique !== false)) {
-      this.logger.warn(
-        'mongodb: Optional field userIsUnique was not specified in the config file! Using default "true"'
-      );
-      this.config.userIsUnique = true;
-    }
 
     if (!config.countActivity) {
       this.logger.warn(
@@ -148,11 +147,14 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
   public async authenticate(username: string, password: string, cb: AuthCallback): Promise<void> {
     this.logger.debug("mongodb: Authenticate user '" + username + "' with password '" + password + "'");
 
-    if (verifyPassword(password, this.cache.get(username)?.password || '')) {
-      // Found user with password in cache
-      this.logger.debug(`mongodb: Found user '${username}' in cache!`);
-      return cb(null, this.cache.get(username).groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
-      // return cb(getCode(200, `Found user '${username}' in cache!`), this.cache.get(username).groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
+    if (username) {
+      const user: CachedUser = this.cache?.get(username) || {password:'',groups:[]};
+      if (verifyPassword(password, user?.password || '')) {
+        // Found user with password in cache
+        this.logger.debug(`mongodb: Found user '${username}' in cache!`);
+        return cb(null, user?.groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
+        // return cb(getCode(200, `Found user '${username}' in cache!`), this.cache.get(username).groups); // WARN: empty group [''] evaluates to false (meaning: access denied)!
+      }
     }
 
     const client = await mongoConnector.connectToDatabase(this.config?.uri);
@@ -194,9 +196,6 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
     } catch (e) {
       this.logger.error(e);
       cb(getInternalError('error, try again: ' + e), false);
-    } finally {
-      await client.close();
-      await mongoConnector.disposeConnection();
     }
   }
 
@@ -233,20 +232,6 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
     try {
       await client.connect();
       const users = await db.collection(this.config?.collections.users);
-      const lookupQuery = `{ "${this.config?.fields?.username}": "${username}" }`;
-      const lookupOptions = `{ "projection": { "_id": 0, "${this.config?.fields?.username}": 1, "${this.config?.fields?.usergroups}": 1 } }`;
-
-      if (!this.config?.userIsUnique || this.config?.userIsUnique === undefined) {
-        // Check if user already exist - not necessary with uniqueIndex
-        const foundUsers = await users.find(JSON.parse(lookupQuery), JSON.parse(lookupOptions));
-        const firstUser = await foundUsers.next();
-        if (firstUser) {
-          await client.close();
-          await mongoConnector.disposeConnection();
-          return cb(null, true); // Signalling OK even if user already exists
-          // return cb(getForbidden(`Bad username, user '${username}' already exists!`), true);
-        }
-      }
 
       if (this.config.allowAddUser) {
         // Trying to insert user - will throw exception if duplicate username already exists
@@ -267,11 +252,8 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
         cb(null, true); // Signalling OK even if user already exists
         // cb(getForbidden(`Bad username, user '${username}' already exists!`), true);
       } else {
-        cb(getInternalError('Error with adding user to MongoDB: ' + typeof e), false);
+        cb(getInternalError('Error with adding user to MongoDB: ' + JSON.stringify(e)), false);
       }
-    } finally {
-      await client.close();
-      await mongoConnector.disposeConnection();
     }
   }
 

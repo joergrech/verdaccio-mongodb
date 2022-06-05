@@ -60,13 +60,6 @@ async function connectToDatabase(MONGODB_URI) {
   return cached.conn;
 }
 
-async function disposeConnection() {
-  if (cached.conn) {
-    cached = { conn: null, promise: null, db: null };
-  }
-  return cached;
-}
-
 async function getDb(MONGODB_DB) {
   if (cached.db) {
     return cached.db;
@@ -156,6 +149,6 @@ function getWeekNumber(d) {
 module.exports.setConfig = setConfig;
 module.exports.setLogger = setLogger;
 module.exports.connectToDatabase = connectToDatabase;
-module.exports.disposeConnection = disposeConnection;
 module.exports.getDb = getDb;
 module.exports.incCounter = incCounter;
+module.exports.getWeekNumber = getWeekNumber;
