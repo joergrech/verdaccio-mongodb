@@ -79,11 +79,3 @@ Configuration options
 
 ## NOTES
 An alternative verdaccio auth plugin exists called `verdaccio-auth-mongo`: see https://www.npmjs.com/package/verdaccio-auth-mongo and https://gitlab.com/stack-library-open/verdaccio-auth-mongo/-/blob/master/index.js
-
-### Debug Tipps
-When encountering problems like:
-* `error--- undefined-mongodb plugin does not have the right code structure` or
-* `plugin not found`
-try to install the plugin into the global directory of verdaccio - see:
-* https://github.com/n4bb12/verdaccio-github-oauth-ui/issues/13#issuecomment-643246372
-* e.g., `npm install verdaccio-mongodb` in directory `~/.nvm/versions/node/v16.15.0/lib/node_modules/verdaccio` (get your dir with `which verdaccio`)
