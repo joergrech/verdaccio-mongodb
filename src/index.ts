@@ -42,11 +42,6 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
     this.logger = options.logger;
     this.config = config;
 
-    // TODO: delete this after testing!
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const pjson = require('../package.json');
-    this.logger.info(`mongodb: Testing version "${pjson.version}"!`);
-
     // Basic configuration check
     let requiredConfigMissing = false;
     if (!config.uri) {
