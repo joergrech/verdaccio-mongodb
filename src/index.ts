@@ -143,7 +143,7 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
     this.logger.debug("mongodb: Authenticate user '" + username + "' with password '" + password + "'");
 
     if (username) {
-      const user: CachedUser = this.cache?.get(username) || {password:'',groups:[]};
+      const user: CachedUser = this.cache?.get(username) || { password: '', groups: [] };
       if (verifyPassword(password, user?.password || '')) {
         // Found user with password in cache
         this.logger.debug(`mongodb: Found user '${username}' in cache!`);
@@ -230,11 +230,10 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
 
       if (this.config.allowAddUser) {
         // Trying to insert user - will throw exception if duplicate username already exists
-        const insertQuery = `{ "${this.config?.fields?.username}": "${username}", "${
-          this.config?.fields?.password
-        }": "${bcryptPassword(password)}", "usergroups": ["${username}","user"] }`;
+        const insertQuery = `{ "${this.config?.fields?.username}": "${username}", "${this.config?.fields?.password
+          }": "${bcryptPassword(password)}", "usergroups": ["${username}","user"] }`;
         const newUser = await users.insertOne(JSON.parse(insertQuery));
-        this.logger.info(`mongodb: Added new user: ${JSON.stringify(newUser)}`);
+        this.logger.info(`mongodb: Added new user '${JSON.stringify(newUser)}'`);
         cb(null, true);
       } else {
         this.logger.warn(`mongodb: Adding new user was disabled! You are not allowed to add users via the CLI!`);
@@ -271,18 +270,16 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
     }
     if (hasRights || user.groups.includes(this.config.adminGroup)) {
       await mongoConnector.incCounter('access', user.name, (pkg as any).name, this.config);
-      this.logger.info(`mongodb: ${user.name} has been granted access to package '${(pkg as any).name}'`);
+      this.logger.info(`mongodb: ${user.name ? 'User ' + user.name : 'Anonymous user'} has been granted access to package '${(pkg as any).name}'`);
       cb(null, true);
     } else {
-      this.logger.error(
-        `mongodb: ${user.name || 'anonymous user'} is not allowed to access the package '${
-          (pkg as any).name
-        }' - config rights set were to '${this.config.rights?.access}`
+      this.logger.debug(
+        `mongodb: ${user.name ? 'User ' + user.name : 'Anonymous user'} is not allowed to access the package '${(pkg as any).name
+        }' - config rights set were to '${this.config.rights?.access}'`
       );
       cb(
         getForbidden(
-          `User ${user.name} is not allowed to access the package ${(pkg as any).name} - only ${
-            this.config.rights?.access
+          `${user.name ? 'User ' + user.name : 'Anonymous user'} is not allowed to access the package ${(pkg as any).name} - only ${this.config.rights?.access
           }s are!`
         ),
         false
@@ -310,21 +307,18 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
     if (hasRights || user.groups.includes(this.config.adminGroup)) {
       await mongoConnector.incCounter('publish', user.name, (pkg as any).name, this.config);
       this.logger.info(
-        `mongodb: ${user.name} has been granted the right to publish the package '${
-          (pkg as any).name
+        `mongodb: ${user.name ? 'User ' + user.name : 'Anonymous user'} has been granted the right to publish the package '${(pkg as any).name
         }' - config rights set were to '${this.config.rights?.publish}'`
       );
       cb(null, true);
     } else {
-      this.logger.error(
-        `mongodb: ${user.name} is not allowed to publish the package '${
-          (pkg as any).name
-        }' - config rights set were to '${this.config.rights?.publish}`
+      this.logger.debug(
+        `mongodb: ${user.name ? 'User ' + user.name : 'Anonymous user'} is not allowed to publish the package '${(pkg as any).name
+        }' - config rights set were to '${this.config.rights?.publish}'`
       );
       cb(
         getForbidden(
-          `User ${user.name} is not allowed to publish the package ${(pkg as any).name} - only ${
-            this.config.rights?.publish
+          `${user.name ? 'User ' + user.name : 'Anonymous user'} is not allowed to publish the package ${(pkg as any).name} - only ${this.config.rights?.publish
           }s are!`
         ),
         false
@@ -352,21 +346,18 @@ export default class AuthMongoDB implements IPluginAuth<AuthMongoDBConfig> {
     if (hasRights || user.groups.includes(this.config.adminGroup)) {
       await mongoConnector.incCounter('unpublish', user.name, (pkg as any).name, this.config);
       this.logger.info(
-        `mongodb: ${user.name} has been granted the right to unpublish the package '${
-          (pkg as any).name
-        }' - config rights set were to '${this.config.rights?.unpublish}`
+        `mongodb: ${user.name ? 'User ' + user.name : 'Anonymous user'} has been granted the right to unpublish the package '${(pkg as any).name
+        }' - config rights set were to '${this.config.rights?.unpublish}'`
       );
       cb(null, true);
     } else {
-      this.logger.error(
-        `mongodb: ${user.name} is not allowed to unpublish the package '${
-          (pkg as any).name
-        }' - config rights set were to '${this.config.rights?.unpublish}`
+      this.logger.debug(
+        `mongodb: ${user.name ? 'User ' + user.name : 'Anonymous user'} is not allowed to unpublish the package '${(pkg as any).name
+        }' - config rights set were to '${this.config.rights?.unpublish}'`
       );
       cb(
         getForbidden(
-          `User ${user.name} is not allowed to unpublish the package ${(pkg as any).name} - only ${
-            this.config.rights?.unpublish
+          `User ${user.name ? 'User ' + user.name : 'Anonymous user'} is not allowed to unpublish the package ${(pkg as any).name} - only ${this.config.rights?.unpublish
           }s are!`
         ),
         false
